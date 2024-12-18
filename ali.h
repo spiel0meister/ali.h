@@ -145,6 +145,11 @@ typedef struct {
 	AliRegion *start, *end;
 }AliArena;
 
+typedef struct {
+	AliRegion* r;
+	size_t count;
+}AliArenaMark;
+
 AliRegion* ali_region_new(size_t capacity);
 void* ali_region_alloc(AliRegion* self, size_t size);
 
@@ -153,6 +158,8 @@ void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
 char* ali_arena_strdup(AliArena* self, const char* cstr);
 char* ali_arena_sprintf(AliArena* self, const char* fmt, ...);
 
+AliArenaMark ali_arena_mark(AliArena* self);
+void ali_arena_rollback(AliArena* self, AliArenaMark mark);
 void ali_arena_reset(AliArena* self);
 void ali_arena_free(AliArena* self);
 // ali_arena end
@@ -329,6 +336,24 @@ void ali_arena_free(AliArena* self) {
 		self->start = next;
 	}
 	self->end = NULL;
+}
+
+AliArenaMark ali_arena_mark(AliArena* self) {
+	return (AliArenaMark) { self->end, self->end->count };
+}
+
+void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
+	if (mark.r == NULL) {
+		arena_reset(self);
+		return;
+	}
+
+	mark.r->count = mark.count;
+	for (AliRegion* r = mark.r; r != NULL; r = r->next) {
+		r->count = 0;
+	}
+
+	self->end = mark.r;
 }
 
 // ali_arena end
@@ -587,6 +612,8 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define arena_strdup ali_arena_strdup
 #define arena_sprintf ali_arena_sprintf
 
+#define arena_mark ali_arena_mark
+#define arena_rollback ali_arena_rollback
 #define arena_reset ali_arena_reset
 #define arena_free ali_arena_free
 // ali_arena end
