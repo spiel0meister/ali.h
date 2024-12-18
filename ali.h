@@ -1,11 +1,12 @@
 /**
 	ali.h - A single header file consisting of things the C std lib is missing.
 	For now, it contains:
-		- some util macros (ail_util)
-		- some simple types (ail_types)
-		- dynamic array (ail_da)
-		- string view (ail_sv)
-		- string builder (ail_sb)
+		- some util macros (ali_util)
+		- some simple types (ali_types)
+		- dynamic array (ali_da)
+		- arena (ali_arena)
+		- string view (ali_sv)
+		- string builder (ali_sb)
 
 	This is a stb-style header file, which means you use this file like it's a normal
 	header file, ex.:
@@ -127,6 +128,35 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 
 // ali_da end
 
+// ali_arena 
+#ifndef ALI_REGION_DEFAULT_CAP
+#define ALI_REGION_DEFAULT_CAP (4 << 10)
+#endif // ALI_REGION_DEFAULT_CAP
+
+typedef struct AliRegion {
+	size_t count;
+	size_t capacity;
+	struct AliRegion* next;
+
+	ali_u8 data[];
+}AliRegion;
+
+typedef struct {
+	AliRegion *start, *end;
+}AliArena;
+
+AliRegion* ali_region_new(size_t capacity);
+void* ali_region_alloc(AliRegion* self, size_t size);
+
+void* ali_arena_alloc(AliArena* self, size_t size);
+void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
+char* ali_arena_strdup(AliArena* self, const char* cstr);
+char* ali_arena_sprintf(AliArena* self, const char* fmt, ...);
+
+void ali_arena_reset(AliArena* self);
+void ali_arena_free(AliArena* self);
+// ali_arena end
+
 // ali_sv
 typedef struct {
 	char* start;
@@ -221,6 +251,87 @@ void* ali_da_free_with_size(void* da, size_t item_size) {
 }
 
 // ali_da end
+
+// ali_arena
+
+AliRegion* ali_region_new(size_t capacity) {
+	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
+	ALI_ASSERT(new != NULL);
+	new->count = 0;
+	new->capacity = capacity;
+	new->next = NULL;
+	return new;
+}
+
+void* ali_region_alloc(AliRegion* self, size_t size) {
+	if (self->count + size >= self->capacity) return NULL;
+	void* ptr = self->data + self->count;
+	self->count += size;
+	return ptr;
+}
+
+void* ali_arena_alloc(AliArena* self, size_t size) {
+	if (self->start == NULL) {
+		self->start = ali_region_new(ALI_REGION_DEFAULT_CAP);
+		self->end = self->start;
+	}
+
+	AliRegion* region = self->end;
+	void* ptr;
+	do {
+		ptr = ali_region_alloc(region, size);
+		if (ptr == NULL) {
+			if (region->next == NULL) {
+				region->next = ali_region_new(ALI_REGION_DEFAULT_CAP);
+			}
+			region = region->next;
+		}
+	} while (ptr == NULL);
+	self->end = region;
+
+	return ptr;
+}
+
+void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes) {
+	void* data = ali_arena_alloc(self, size_bytes);
+	ALI_MEMCPY(data, mem, size_bytes);
+	return data;
+}
+
+char* ali_arena_strdup(AliArena* self, const char* cstr) {
+	return ali_arena_memdup(self, cstr, strlen(cstr) + 1);
+}
+
+char* ali_arena_sprintf(AliArena* self, const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+
+	char* out;
+	ALI_ASSERT(vasprintf(&out, fmt, args) >= 0);
+	char* real_out = ali_arena_strdup(self, out);
+	ALI_FREE(out);
+
+	va_end(args);
+	return real_out;
+}
+
+void ali_arena_reset(AliArena* self) {
+	for (AliRegion* r = self->start; r != NULL; r = r->next) {
+		r->count = 0;
+	}
+	self->end = self->start;
+}
+
+void ali_arena_free(AliArena* self) {
+	while (self->start != NULL) {
+		AliRegion* next = self->start->next;
+		ALI_FREE(self->start);
+		self->start = next;
+	}
+	self->end = NULL;
+}
+
+// ali_arena end
 
 // ali_sv
 
@@ -360,7 +471,7 @@ void ali_sb_push_strs_null(AliSb* self, ...) {
 	while (str != NULL) {
 		size_t n = strlen(str);
 		ali_sb_maybe_resize(self, n);
-		memcpy(self->data + self->count, str, n);
+		ALI_MEMCPY(self->data + self->count, str, n);
 		self->count += n;
 		str = va_arg(args, const char*);
 	}
@@ -373,9 +484,9 @@ void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...) {
 	va_start(args, fmt);
 
 	char* str;
-	assert(vasprintf(&str, fmt, args) == 0);
+	ALI_ASSERT(vasprintf(&str, fmt, args) == 0);
 	ali_sb_push_strs(self, str);
-	free(str);
+	ALI_FREE(str);
 
 	va_end(args);
 }
@@ -466,6 +577,19 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define da_for ali_da_for
 #define da_foreach ali_da_foreach
 // ali_da end
+
+// ali_arena
+#define region_new ali_region_new
+#define region_alloc ali_region_alloc
+
+#define arena_alloc ali_arena_alloc
+#define arena_memdup ali_arena_memdup
+#define arena_strdup ali_arena_strdup
+#define arena_sprintf ali_arena_sprintf
+
+#define arena_reset ali_arena_reset
+#define arena_free ali_arena_free
+// ali_arena end
 
 // ali_sv
 #define SV_FMT ALI_SV_FMT
