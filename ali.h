@@ -83,6 +83,8 @@
 #define ALI_PANIC(...) do { fprintf(stderr, __VA_ARGS__); ALI_ABORT(); } while (0)
 
 #define ALI_RETURN_DEFER(value) do { result = value; goto defer } while (0)
+
+#define ALI_FORMAT_ATTRIBUTE(str, vstart) __attribute__((__format__(printf, str, vstart)))
 // ali_util end
 
 // ali_types
@@ -110,6 +112,8 @@ extern FILE* ali_global_logfile;
 extern AliLogLevel ali_global_loglevel;
 
 void ali_init_global_log();
+
+ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_log_log(AliLogLevel level, const char* fmt, ...);
 
 #define ali_log_info(...) ali_log_log(LOG_INFO, __VA_ARGS__)
@@ -178,6 +182,8 @@ void* ali_region_alloc(AliRegion* self, size_t size);
 void* ali_arena_alloc(AliArena* self, size_t size);
 void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
 char* ali_arena_strdup(AliArena* self, const char* cstr);
+
+ALI_FORMAT_ATTRIBUTE(2, 3)
 char* ali_arena_sprintf(AliArena* self, const char* fmt, ...);
 
 AliArenaMark ali_arena_mark(AliArena* self);
@@ -226,6 +232,7 @@ typedef struct {
 
 void ali_sb_maybe_resize(AliSb* self, size_t to_add);
 void ali_sb_push_strs_null(AliSb* self, ...);
+ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...);
 void ali_sb_free(AliSb* self);
 
@@ -621,11 +628,15 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 
 // ali_util
 #define ARRAY_LEN ALI_ARRAY_LEN
+
 #define UNUSED ALI_UNUSED
 #define UNREACABLE ALI_UNREACHABLE
 #define TODO ALI_TODO
 #define PANIC ALI_PANIC
+
 #define RETURN_DEFER ALI_RETURN_DEFER
+
+#define FORMAT_ATTRIBUTE ALI_FORMAT_ATTRIBUTE
 // ali_util end
 
 // ali_types
