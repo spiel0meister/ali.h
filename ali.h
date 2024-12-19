@@ -218,6 +218,7 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 
 #ifdef ALI_IMPLEMENTATION
 #undef ALI_IMPLEMENTATION
+#include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
