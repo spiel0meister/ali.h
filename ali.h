@@ -3,6 +3,7 @@
 	For now, it contains:
 		- some util macros (ali_util)
 		- some simple types (ali_types)
+		- logging (ali_log)
 		- dynamic array (ali_da)
 		- arena (ali_arena)
 		- string view (ali_sv)
@@ -74,12 +75,12 @@
 #endif // ALI_ABORT
 
 // ali_util
-
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 
 #define ALI_UNUSED(thing) (void)(thing)
 #define ALI_UNREACABLE() do { fprintf(stderr, "%s:%d: UNREACABLE\n", __FILE__, __LINE__); ALI_ABORT(); } while (0)
 #define ALI_TODO() do { fprintf(stderr, "%s:%d: TODO: %s not implemented\n", __FILE__, __LINE__, __func__); ALI_ABORT(); } while (0)
+#define ALI_PANIC(...) do { fprintf(stderr, __VA_ARGS__); ALI_ABORT(); } while (0)
 
 #define ALI_RETURN_DEFER(value) do { result = value; goto defer } while (0)
 // ali_util end
@@ -95,6 +96,27 @@ typedef int16_t ali_i16;
 typedef int32_t ali_i32;
 typedef int64_t ali_i64;
 // ali_types end
+
+// ali_log
+typedef enum {
+	LOG_INFO = 0,
+	LOG_WARN,
+	LOG_ERROR,
+
+	LOG_COUNT_
+}AliLogLevel;
+
+extern FILE* ali_global_logfile;
+extern AliLogLevel ali_global_loglevel;
+
+void ali_init_global_log();
+void ali_log_log(AliLogLevel level, const char* fmt, ...);
+
+#define ali_log_info(...) ali_log_log(LOG_INFO, __VA_ARGS__)
+#define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
+#define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
+
+// ali_log end
 
 // ali_da
 #ifndef ALI_DA_DEFAULT_INIT_CAPACITY
@@ -222,6 +244,40 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
+
+// ali_log
+
+static_assert(LOG_COUNT_ == 3, "Log level was added");
+const char* loglevel_to_str[LOG_COUNT_] = {
+	[LOG_INFO] = "INFO",
+	[LOG_WARN] = "WARN",
+	[LOG_ERROR] = "ERROR",
+};
+
+FILE* ali_global_logfile = NULL;
+AliLogLevel ali_global_loglevel = LOG_INFO;
+
+void ali_init_global_log() {
+	ali_global_logfile = stdout;
+	ali_global_loglevel = LOG_INFO;
+}
+
+void ali_log_log(AliLogLevel level, const char* fmt, ...) {
+	ALI_ASSERT(ali_global_logfile != NULL);
+
+	va_list args;
+	va_start(args, fmt);
+
+	if (ali_global_loglevel >= level) {
+		fprintf(ali_global_logfile, "[%s] ", loglevel_to_str[level]);
+		vfprintf(ali_global_logfile, fmt, args);
+		fprintf(ali_global_logfile, "\n");
+	}
+
+	va_end(args);
+}
+
+// ali_log end
 
 // ali_da
 AliDaHeader* ali_da_new_header_with_size(size_t init_capacity, size_t item_size) {
@@ -568,6 +624,7 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define UNUSED ALI_UNUSED
 #define UNREACABLE ALI_UNREACHABLE
 #define TODO ALI_TODO
+#define PANIC ALI_PANIC
 #define RETURN_DEFER ALI_RETURN_DEFER
 // ali_util end
 
@@ -582,6 +639,20 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define i32 ali_i32
 #define i64 ali_i64
 // ali_types end
+
+// ali_log
+
+#define global_logfile ali_global_logfile
+#define global_loglevel ali_global_loglevel
+
+#define init_global_log ali_init_global_log
+#define log_log ali_log_log
+
+#define log_info ali_log_info
+#define log_warn ali_log_warn
+#define log_error ali_log_error
+
+// ali_log end
 
 // ali_da
 #define da_new_header_with_size ali_da_new_header_with_size
