@@ -16,7 +16,7 @@
 		#define ALI_IMPLEMENTATION
 		#include "ali.h"
 
-	ali.h also supports removing the ali_* prefix of functions and macros by definging ALI_REMOVE_PREFIX.
+	ali.h also supports removing the ali_* prefix of functions and macros by defining ALI_REMOVE_PREFIX.
 
 	License:
 	MIT License
