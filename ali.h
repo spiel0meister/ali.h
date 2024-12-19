@@ -344,7 +344,7 @@ AliArenaMark ali_arena_mark(AliArena* self) {
 
 void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
 	if (mark.r == NULL) {
-		arena_reset(self);
+		ali_arena_reset(self);
 		return;
 	}
 
