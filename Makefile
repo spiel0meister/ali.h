@@ -1,4 +1,4 @@
-CFLAGS = -Wall -Wextra -Werror -fsanitize=undefined,address -ggdb
+CFLAGS = -Wall -Wextra -Werror -ggdb
 
 all: main
 
