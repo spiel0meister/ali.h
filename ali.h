@@ -7,6 +7,7 @@
 		- dynamic array (ali_da)
 		- temp allocator (ali_temp_alloc)
 		- arena (ali_arena)
+		- utf8 (ali_utf8)
 		- string view (ali_sv)
 		- string builder (ali_sb)
 
@@ -210,6 +211,29 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark);
 void ali_arena_reset(AliArena* self);
 void ali_arena_free(AliArena* self);
 // ali_arena end
+
+// ali_utf8
+typedef ali_u8 ali_utf8;
+typedef ali_u32 ali_utf8codepoint;
+
+#define ALI_UTF8(cstr) (ali_utf8*)(cstr)
+
+size_t ali_utf8len(const ali_utf8* utf8);
+ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, size_t* codepoint_size);
+ali_utf8codepoint* ali_utf8_to_codepoints(const ali_utf8* utf8, size_t* count);
+
+bool ali_is_codepoint_valid(ali_utf8codepoint codepoint);
+size_t ali_codepoint_size(ali_utf8codepoint codepoint);
+const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint);
+ali_utf8* ali_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len);
+
+ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, size_t* count);
+ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len);
+
+#define ali_free_utf8 ALI_FREE
+#define ali_free_codepoints ALI_FREE
+
+// ali_utf8 end
 
 // ali_sv
 typedef struct {
@@ -500,6 +524,133 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
 
 // ali_arena end
 
+// ali_utf8
+size_t ali_utf8len(const ali_utf8* utf8) {
+	size_t len = 0;
+	while (*utf8 != 0) {
+		size_t codepoint_size = 0;
+		ali_utf8c_to_codepoint(utf8, &codepoint_size);
+		len++;
+		utf8 += codepoint_size;
+	}
+	return len;
+}
+
+bool ali_codepoint_is_valid(ali_utf8codepoint codepoint) {
+	if (codepoint > 0x10FFFF) return false;
+	return true;
+}
+
+ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, size_t* codepoint_size) {
+	ali_utf8codepoint codepoint = 0;
+	size_t codepoint_size_ = 0;
+
+	if ((utf8c[0] & 0x80) == 0x00) {
+		codepoint = utf8c[0];
+		codepoint_size_ = 1;
+	} else if ((utf8c[0] & 0xE0) == 0xC0) {
+		codepoint = ((utf8c[0] & 0x1F) << 6*1) | ((utf8c[1] & 0x3F) << 6*0);
+		codepoint_size_ = 2;
+	} else if ((utf8c[0] & 0xF0) == 0xE0) {
+		codepoint = ((utf8c[0] & 0x1F) << 6*2) | ((utf8c[1] & 0x3F) << 6*1) | ((utf8c[2] & 0x3F) << 6*0);
+		codepoint_size_ = 3;
+	} else if ((utf8c[0] & 0xF8) == 0xF0) {
+		codepoint = ((utf8c[0] & 0x1F) << 6*3) | ((utf8c[1] & 0x3F) << 6*2) | ((utf8c[2] & 0x3F) << 6*1) | ((utf8c[3] & 0x3F) << 6*0);
+		codepoint_size_ = 4;
+	} else {
+		// invalid
+		return -1;
+	}
+
+	if (codepoint_size) *codepoint_size = codepoint_size_;
+	return codepoint;
+}
+
+ali_utf8codepoint* ali_utf8_to_codepoints(const ali_utf8* utf8, size_t* count) {
+	size_t len = ali_utf8len(utf8);
+	*count = len;
+
+	ali_utf8codepoint* codepoints = ALI_MALLOC(len * sizeof(*codepoints));
+	len = 0;
+	while (*utf8 != 0) {
+		size_t codepoint_size = 0;
+		codepoints[len++] = ali_utf8c_to_codepoint(utf8, &codepoint_size);
+		utf8 += codepoint_size;
+	}
+
+	return codepoints;
+}
+
+size_t ali_codepoint_size(ali_utf8codepoint codepoint) {
+	if (codepoint > 0x10FFFF) return 0;
+	else if (codepoint > 0xFFFF) return 4;
+	else if (codepoint > 0x07FF) return 3;
+	else if (codepoint > 0x007F) return 2;
+	else return 1;
+}
+
+const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint) {
+static ali_utf8 utf8[5] = {0};
+	
+	size_t codepoint_size = ali_codepoint_size(codepoint);
+	if (codepoint_size == 4) {
+		utf8[0] = 0xF0 | ((codepoint >> 6*3) & 0x07);
+		utf8[1] = 0x80 | ((codepoint >> 6*2) & 0x3F);
+		utf8[2] = 0x80 | ((codepoint >> 6*1) & 0x3F);
+		utf8[3] = 0x80 | ((codepoint >> 6*0) & 0x3F);
+	} else if (codepoint_size == 3) {
+		utf8[0] = 0xE0 | ((codepoint >> 6*2) & 0x0F);
+		utf8[1] = 0x80 | ((codepoint >> 6*1) & 0x3F);
+		utf8[2] = 0x80 | ((codepoint >> 6*0) & 0x3F);
+	} else if (codepoint_size == 2) {
+		utf8[0] = 0xC0 | ((codepoint >> 6*1) & 0x1F);
+		utf8[1] = 0x80 | ((codepoint >> 6*0) & 0x3F);
+	} else if (codepoint_size == 1) {
+		utf8[0] = codepoint;
+	} else {
+		// invalid
+		return NULL;
+	}
+	utf8[codepoint_size] = 0;
+
+	return utf8;
+}
+
+ali_utf8* ali_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len) {
+	size_t real_len = 0;
+	for (size_t i = 0; i < len; ++i) {
+		real_len += ali_codepoint_size(codepoints[i]);
+	}
+
+	ali_utf8* utf8 = ALI_MALLOC(real_len + 1);
+	ali_utf8* utf8p = utf8;
+	for (size_t i = 0; i < len; ++i) {
+		size_t codepoint_size = ali_codepoint_size(codepoints[i]);
+		memcpy(utf8p, ali_codepoint_to_utf8(codepoints[i]), codepoint_size);
+		utf8p += codepoint_size;
+	}
+	utf8[real_len] = 0;
+
+	return utf8;
+}
+
+ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, size_t* count) {
+	ali_utf8codepoint* codepoints = ali_utf8_to_codepoints(utf8, count);
+	ali_utf8codepoint* out = ali_temp_alloc(sizeof(*out) * (*count));
+	ALI_MEMCPY(out, codepoints, sizeof(*out) * (*count));
+	ali_free_codepoints(codepoints);
+	return out;
+}
+
+ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len) {
+	ali_utf8* utf8 = ali_codepoints_to_utf8(codepoints, len);
+	ali_utf8* out = (ali_utf8*)ali_temp_strdup((char*)utf8);
+	ali_free_utf8(utf8);
+	return out;
+}
+
+// ali_utf8 end
+
 // ali_sv
 
 void ali_sv_step(AliSv* self) {
@@ -617,9 +768,9 @@ bool ali_sv_ends_with(AliSv self, AliSv suffix) {
 }
 
 char* ali_temp_sv_to_cstr(AliSv sv) {
-	char* out = ali_temp_alloc(sv.count + 1);
-	ALI_MEMCPY(out, sv.start, sv.count);
-	out[sv.count] = 0;
+	char* out = ali_temp_alloc(sv.len + 1);
+	ALI_MEMCPY(out, sv.start, sv.len);
+	out[sv.len] = 0;
 	return out;
 }
 
@@ -781,6 +932,7 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 
 #define temp_alloc ali_temp_alloc
 #define temp_sprintf ali_temp_sprintf
+#define temp_strdup ali_temp_strdup
 #define temp_stamp ali_temp_stamp
 #define temp_rewind ali_temp_rewind
 #define temp_reset ali_temp_reset
@@ -801,6 +953,26 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define arena_reset ali_arena_reset
 #define arena_free ali_arena_free
 // ali_arena end
+
+// ali_utf8
+// NOTE: we mustn't do this
+// #define utf8 ali_utf8
+#define utf8codepoint ali_utf8codepoint
+
+#define UTF8 ALI_UTF8
+
+#define utf8len ali_utf8len
+#define utf8c_to_codepoint ali_utf8c_to_codepoint
+#define utf8_to_codepoints ali_utf8_to_codepoints
+
+#define is_codepoint_valid ali_is_codepoint_valid
+#define codepoint_size ali_codepoint_size
+#define codepoint_to_utf8 ali_codepoint_to_utf8
+#define codepoints_to_utf8 ali_codepoints_to_utf8
+
+#define temp_utf8_to_codepoints ali_temp_utf8_to_codepoints
+#define temp_codepoints_to_utf8 ali_temp_codepoints_to_utf8
+// ali_utf8 end
 
 // ali_sv
 #define SV_FMT ALI_SV_FMT
