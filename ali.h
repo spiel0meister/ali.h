@@ -1,8 +1,8 @@
 /**
 	ali.h - A single header file consisting of things the C std lib is missing.
 	For now, it contains:
-		- some util macros (ali_util)
-		- some simple types (ali_types)
+		- some util stuff (ali_util)
+		- some simple types and aliases (ali_types)
 		- logging (ali_log)
 		- dynamic array (ali_da)
 		- temp allocator (ali_temp_alloc)
@@ -87,6 +87,10 @@
 #define ALI_RETURN_DEFER(value) do { result = value; goto defer } while (0)
 
 #define ALI_FORMAT_ATTRIBUTE(str, vstart) __attribute__((__format__(printf, str, vstart)))
+
+// 'path/to/file.c' -> 'file.c', '/path/to/dir' -> 'dir'
+const char* ali_path_name(const char* path);
+
 // ali_util end
 
 // ali_types
@@ -236,6 +240,8 @@ bool ali_sv_eq(AliSv left, AliSv right);
 bool ali_sv_starts_with(AliSv self, AliSv prefix);
 bool ali_sv_ends_with(AliSv self, AliSv suffix);
 
+char* ali_temp_sv_to_cstr(AliSv sv);
+
 // ali_sv end
 
 // ali_sb
@@ -256,15 +262,27 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 
 #define ali_sb_push_strs(...) ali_sb_push_strs_null(__VA_ARGS__, NULL)
 
+#define ali_sb_to_sv(sb) ali_sv_from_parts((sb).items, (sb).count)
+
 // ali_sb end
 
 #endif // ALI_H_
 
 #ifdef ALI_IMPLEMENTATION
 #undef ALI_IMPLEMENTATION
+#include <string.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
+
+// ali_util
+
+const char* ali_path_name(const char* path) {
+	const char* slash = strrchr(path, '/');
+	return slash != NULL ? slash + 1 : path;
+}
+
+// ali_util end
 
 // ali_log
 
@@ -598,6 +616,13 @@ bool ali_sv_ends_with(AliSv self, AliSv suffix) {
 	return ali_sv_eq(ali_sv_from_parts(self.start + self.len - suffix.len, suffix.len), suffix);
 }
 
+char* ali_temp_sv_to_cstr(AliSv sv) {
+	char* out = ali_temp_alloc(sv.count + 1);
+	ALI_MEMCPY(out, sv.start, sv.count);
+	out[sv.count] = 0;
+	return out;
+}
+
 // ali_sv end
 
 // ali_sb
@@ -711,6 +736,12 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define i64 ali_i64
 // ali_types end
 
+// ali_util
+
+#define path_name ali_path_name
+
+// ali_util end
+
 // ali_log
 
 #define global_logfile ali_global_logfile
@@ -794,6 +825,8 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define sv_eq ali_sv_eq
 #define sv_starts_with ali_sv_starts_with
 #define sv_ends_with ali_sv_ends_with
+
+#define temp_sv_to_cstr ali_temp_sv_to_cstr
 // ali_sv end
 
 // ali_sb
@@ -803,6 +836,7 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define sb_free ali_sb_free
 
 #define sb_push_strs ali_sb_push_strs
+#define sb_to_sv ali_sb_to_sv
 
 #define sb_read_file ali_sb_read_file
 #define sb_write_file ali_sb_write_file
