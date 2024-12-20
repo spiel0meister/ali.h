@@ -5,6 +5,7 @@
 		- some simple types (ali_types)
 		- logging (ali_log)
 		- dynamic array (ali_da)
+		- temp allocator (ali_temp_alloc)
 		- arena (ali_arena)
 		- string view (ali_sv)
 		- string builder (ali_sb)
@@ -153,6 +154,19 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
 
 // ali_da end
+
+// ali_temp_alloc
+#ifndef ALI_TEMP_BUF_SIZE
+#define ALI_TEMP_BUF_SIZE (8 << 20)
+#endif // ALI_TEMP_BUF_SIZE
+
+void* ali_temp_alloc(size_t size);
+ALI_FORMAT_ATTRIBUTE(1, 2) char* ali_temp_sprintf(const char* fmt, ...);
+size_t ali_temp_stamp(void);
+void ali_temp_rewind(size_t stamp);
+void ali_temp_reset(void);
+
+// ali_temp_alloc end
 
 // ali_arena 
 #ifndef ALI_REGION_DEFAULT_CAP
@@ -322,6 +336,52 @@ void* ali_da_free_with_size(void* da, size_t item_size) {
 }
 
 // ali_da end
+
+// ali_temp_alloc
+
+static ali_u8 ali_temp_buffer[ALI_TEMP_BUF_SIZE] = {0};
+static size_t ali_temp_buffer_size = 0;
+
+void* ali_temp_alloc(size_t size) {
+	ALI_ASSERT(ali_temp_buffer_size + size < ALI_TEMP_BUF_SIZE);
+	void* ptr = ali_temp_buffer + ali_temp_buffer_size;
+	ali_temp_buffer_size += size;
+	return ptr;
+}
+
+char* ali_temp_strdup(const char* str) {
+	size_t size = strlen(str) + 1;
+	char* copy = ali_temp_alloc(size);
+	return ALI_MEMCPY(copy, str, size);
+}
+
+char* ali_temp_sprintf(const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	int n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+
+	char* out = ali_temp_alloc(n + 1);
+	va_start(args, fmt);
+	vsnprintf(out, n + 1, fmt, args);
+	va_end(args);
+
+	return out;
+}
+
+size_t ali_temp_stamp(void) {
+	return ali_temp_buffer_size;
+}
+
+void ali_temp_rewind(size_t stamp) {
+	ali_temp_buffer_size = stamp;
+}
+
+void ali_temp_reset(void) {
+	ali_temp_buffer_size = 0;
+}
+
+// ali_temp_alloc end
 
 // ali_arena
 
@@ -685,6 +745,16 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define da_for ali_da_for
 #define da_foreach ali_da_foreach
 // ali_da end
+
+// ali_temp_alloc
+
+#define temp_alloc ali_temp_alloc
+#define temp_sprintf ali_temp_sprintf
+#define temp_stamp ali_temp_stamp
+#define temp_rewind ali_temp_rewind
+#define temp_reset ali_temp_reset
+
+// ali_temp_alloc end
 
 // ali_arena
 #define region_new ali_region_new
