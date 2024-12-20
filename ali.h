@@ -41,6 +41,7 @@
 #define ALI_H_
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #define ALI_VERSION "0.1.0"
 
@@ -261,7 +262,6 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 
 #ifdef ALI_IMPLEMENTATION
 #undef ALI_IMPLEMENTATION
-#include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
