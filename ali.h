@@ -81,7 +81,7 @@
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 
 #define ALI_UNUSED(thing) (void)(thing)
-#define ALI_UNREACABLE() do { fprintf(stderr, "%s:%d: UNREACABLE\n", __FILE__, __LINE__); ALI_ABORT(); } while (0)
+#define ALI_UNREACHABLE() do { fprintf(stderr, "%s:%d: UNREACABLE\n", __FILE__, __LINE__); ALI_ABORT(); } while (0)
 #define ALI_TODO() do { fprintf(stderr, "%s:%d: TODO: %s not implemented\n", __FILE__, __LINE__, __func__); ALI_ABORT(); } while (0)
 #define ALI_PANIC(...) do { fprintf(stderr, __VA_ARGS__); ALI_ABORT(); } while (0)
 
@@ -107,6 +107,7 @@ typedef int64_t ali_i64;
 // ali_types end
 
 // ali_log
+#ifndef ALI_NO_LOG
 typedef enum {
 	LOG_INFO = 0,
 	LOG_WARN,
@@ -127,6 +128,7 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
 #define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
 
+#endif // ALI_NO_LOG
 // ali_log end
 
 // ali_da
@@ -148,11 +150,13 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 #define ali_da_new_header(init_capacity) ali_da_new_header_with_size(da, init_capacity, sizeof(*(da)))
 #define ali_da_get_header(da) ali_da_get_header_with_size(da, sizeof(*(da)))
 #define ali_da_maybe_resize(da, to_add) ali_da_maybe_resize_with_size(da, to_add, sizeof(*(da)))
-#define ali_da_getlen(da) (ALI_ASSERT((da) != NULL), ali_da_get_header(da)->count)
+#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
+
+#define ali_da_reset(da) (ALI_ASSERT((da) != NULL), ali_da_get_header(da)->count = 0)
 
 #define ali_da_append(da, item) ((da) = ali_da_maybe_resize(da, 1), (da)[ali_da_get_header_with_size(da, sizeof(*(da)))->count++] = item)
 
-#define ali_da_free(da) ((da) = ali_da_free_with_size(da, sizeof(*(da)))
+#define ali_da_free(da) ((da) = ali_da_free_with_size(da, sizeof(*(da))))
 #define ali_da_remove_unordered(da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
 #define ali_da_remove_ordered(da, i) (ALI_ASSERT(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
 
@@ -309,6 +313,7 @@ const char* ali_path_name(const char* path) {
 // ali_util end
 
 // ali_log
+#ifndef ALI_NO_LOG
 
 static_assert(LOG_COUNT_ == 3, "Log level was added");
 const char* loglevel_to_str[LOG_COUNT_] = {
@@ -340,6 +345,7 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 	va_end(args);
 }
 
+#endif // ALI_LOG_END
 // ali_log end
 
 // ali_da
@@ -866,7 +872,7 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define ARRAY_LEN ALI_ARRAY_LEN
 
 #define UNUSED ALI_UNUSED
-#define UNREACABLE ALI_UNREACHABLE
+#define UNREACHABLE ALI_UNREACHABLE
 #define TODO ALI_TODO
 #define PANIC ALI_PANIC
 
@@ -918,8 +924,10 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define da_maybe_resize ali_da_maybe_resize
 #define da_getlen ali_da_getlen
 
-#define da_append
-#define da_free
+#define da_append ali_da_append
+#define da_free ali_da_free
+
+#define da_reset ali_da_reset
 
 #define da_remove_unordered ali_da_remove_unordered
 #define da_remove_ordered ali_da_remove_ordered
