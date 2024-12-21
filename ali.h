@@ -11,6 +11,8 @@
 		- string view (ali_sv)
 		- string builder (ali_sb)
 		- measure code (ali_measure)
+		- math (ali_math)
+		- random numbers (ali_rand)
 
 	This is a stb-style header file, which means you use this file like it's a normal
 	header file, ex.:
@@ -80,11 +82,18 @@
 
 // ali_util
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
+#define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
 
 #define ALI_UNUSED(thing) (void)(thing)
 #define ALI_UNREACHABLE() do { fprintf(stderr, "%s:%d: UNREACABLE\n", __FILE__, __LINE__); ALI_ABORT(); } while (0)
 #define ALI_TODO() do { fprintf(stderr, "%s:%d: TODO: %s not implemented\n", __FILE__, __LINE__, __func__); ALI_ABORT(); } while (0)
 #define ALI_PANIC(...) do { fprintf(stderr, __VA_ARGS__); ALI_ABORT(); } while (0)
+
+#define ALI_SWAP(Type, a, b) do { \
+		Type __tmp = *(a); \
+		*(a) = *(b); \
+		*(b) = (__tmp); \
+	} while (0)
 
 #define ALI_RETURN_DEFER(value) do { result = value; goto defer } while (0)
 
@@ -105,6 +114,15 @@ typedef int8_t  ali_i8;
 typedef int16_t ali_i16;
 typedef int32_t ali_i32;
 typedef int64_t ali_i64;
+
+typedef float ali_f32;
+
+#ifdef __x86_64__
+typedef double ali_f64;
+#endif // __x86_64__
+
+typedef ali_u64 ali_usize;
+typedef ali_i64 ali_isize;
 // ali_types end
 
 // ali_log
@@ -311,6 +329,30 @@ void ali_measure_end(const char* name);
 
 void ali_print_measurements(void);
 // ali_measure end
+
+// ali_math
+
+ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t);
+ali_f32 ali_normalizef(ali_f32 start, ali_f32 end, ali_f32 value);
+ali_u64 ali_rotl64(ali_u64 x, ali_u8 k);
+
+ali_f32 ali_quadbezierf(ali_f32 start, ali_f32 end, ali_f32 control, ali_f32 t);
+ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 control2, ali_f32 t);
+// ali_math end
+
+// ali_rand
+
+typedef struct {
+	ali_u64 state[4];
+}AliXoshiro256ppState;
+
+ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state);
+void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]);
+
+ali_u64 ali_rand();
+ali_u64* ali_temp_rand_sequence(ali_usize count);
+
+// ali_rand end
 
 #endif // ALI_H_
 
@@ -941,6 +983,72 @@ void ali_print_measurements(void) {
 
 // ali_measure end
 
+// ali_math
+
+ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t) {
+	return a + (b - a) * t;
+}
+
+ali_f32 ali_normalizef(ali_f32 start, ali_f32 end, ali_f32 value) {
+	return (value - start) / (end - start);
+}
+
+ali_u64 ali_rotl64(ali_u64 x, ali_u8 k) {
+	return (x << k) | (x >> (64 - k));
+
+}
+ali_f32 ali_quadbezierf(ali_f32 start, ali_f32 end, ali_f32 control, ali_f32 t) {
+	ali_f32 a = ali_lerpf(start, control, t);
+	ali_f32 b = ali_lerpf(control, end, t);
+	return ali_lerpf(a, b, t);
+}
+
+ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 control2, ali_f32 t) {
+	ali_f32 a = ali_quadbezierf(start, control1, control2, t);
+	ali_f32 b = ali_quadbezierf(control1, control2, end, t);
+	return ali_lerpf(a, b, t);
+}
+
+// ali_math end
+
+// ali_rand
+
+ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
+	ali_u64 *s = state->state;
+	ali_u64 const result = ali_rotl64(s[1] * 5, 7) * 9;
+	ali_u64 const t = s[1] << 17;
+
+	s[2] ^= s[0];
+	s[3] ^= s[1];
+	s[1] ^= s[2];
+	s[0] ^= s[3];
+
+	s[2] ^= t;
+	s[3] = ali_rotl64(s[3], 45);
+
+	return result;
+}
+
+void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]) {
+	ALI_MEMCPY(state->state, seed, sizeof(state->state));
+}
+
+ali_u64* ali_temp_rand_sequence(ali_usize count) {
+	ali_u64* out = ali_temp_alloc(sizeof(*out) * count);
+	for (ali_usize i = 0; i < count; ++i) out[i] = ali_rand();
+	return out;
+}
+
+AliXoshiro256ppState xoshiro_global_state = { { 1111, 235, 4554, 515 } };
+
+ali_u64 ali_rand() {
+	return ali_xoshiro256pp_next(&xoshiro_global_state);
+}
+
+#define ali_srand(seed) ali_xoshiro256pp_seed(&xoshiro_global_state, seed)
+
+// ali_rand end
+
 #endif // ALI_IMPLEMENTATION
 
 #ifdef ALI_REMOVE_PREFIX
@@ -948,6 +1056,7 @@ void ali_print_measurements(void) {
 
 // ali_util
 #define ARRAY_LEN ALI_ARRAY_LEN
+#define INLINE_ARRAY ALI_INLINE_ARRAY
 
 #define UNUSED ALI_UNUSED
 #define UNREACHABLE ALI_UNREACHABLE
@@ -957,6 +1066,10 @@ void ali_print_measurements(void) {
 #define RETURN_DEFER ALI_RETURN_DEFER
 
 #define FORMAT_ATTRIBUTE ALI_FORMAT_ATTRIBUTE
+
+#define SWAP ALI_SWAP
+
+#define path_name ali_path_name
 // ali_util end
 
 // ali_types
@@ -969,13 +1082,16 @@ void ali_print_measurements(void) {
 #define i16 ali_i16
 #define i32 ali_i32
 #define i64 ali_i64
+
+#define f32 ali_f32
+
+#ifdef __x86_64__
+#define f64 ali_f64
+#endif // __x86_64__
+
+#define usize ali_usize
+#define isize ali_isize
 // ali_types end
-
-// ali_util
-
-#define path_name ali_path_name
-
-// ali_util end
 
 // ali_log
 
