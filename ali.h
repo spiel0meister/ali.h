@@ -199,6 +199,8 @@ size_t ali_temp_stamp(void);
 void ali_temp_rewind(size_t stamp);
 void ali_temp_reset(void);
 
+void* ali_temp_memdup(void* data, ali_usize data_size);
+
 // ali_temp_alloc end
 
 // ali_arena 
@@ -450,6 +452,12 @@ void* ali_temp_alloc(size_t size) {
 	void* ptr = ali_temp_buffer + ali_temp_buffer_size;
 	ali_temp_buffer_size += size;
 	return ptr;
+}
+
+void* ali_temp_memdup(void* data, ali_usize data_size) {
+	void* mem = ali_temp_alloc(data_size);
+	ALI_MEMCPY(mem, data, data_size);
+	return mem;
 }
 
 char* ali_temp_strdup(const char* str) {
@@ -1132,6 +1140,7 @@ ali_u64 ali_rand() {
 // ali_temp_alloc
 
 #define temp_alloc ali_temp_alloc
+#define temp_memdup ali_temp_memdup
 #define temp_sprintf ali_temp_sprintf
 #define temp_strdup ali_temp_strdup
 #define temp_stamp ali_temp_stamp
