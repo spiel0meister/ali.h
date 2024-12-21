@@ -129,6 +129,10 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
 #define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
 
+#else // ALI_LOG_END
+#define ali_log_info printf
+#define ali_log_warn printf
+#define ali_log_error(...) fprintf(stderr, __VA_ARGS__)
 #endif // ALI_NO_LOG
 // ali_log end
 
@@ -354,7 +358,6 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 
 	va_end(args);
 }
-
 #endif // ALI_LOG_END
 // ali_log end
 
