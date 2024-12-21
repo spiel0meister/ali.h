@@ -10,6 +10,7 @@
 		- utf8 (ali_utf8)
 		- string view (ali_sv)
 		- string builder (ali_sb)
+		- measure code (ali_measure)
 
 	This is a stb-style header file, which means you use this file like it's a normal
 	header file, ex.:
@@ -272,7 +273,7 @@ char* ali_temp_sv_to_cstr(AliSv sv);
 
 // ali_sv end
 
-// ali_sb
+// @module ali_sb
 typedef struct {
 	char* data;
 	size_t count;
@@ -292,7 +293,20 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 
 #define ali_sb_to_sv(sb) ali_sv_from_parts((sb).items, (sb).count)
 
-// ali_sb end
+// @module ali_sb end
+
+// ali_measure
+double ali_get_now();
+
+#ifndef ALI_MEASUREMENTS_COUNT
+#define ALI_MEASUREMENTS_COUNT 1024
+#endif // ALI_MEASUREMENTS_COUNT
+
+void ali_measure_start(const char* name);
+void ali_measure_end(const char* name);
+
+void ali_print_measurements(void);
+// ali_measure end
 
 #endif // ALI_H_
 
@@ -300,6 +314,7 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 #undef ALI_IMPLEMENTATION
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 #include <ctype.h>
 #include <errno.h>
 
@@ -325,13 +340,8 @@ const char* loglevel_to_str[LOG_COUNT_] = {
 FILE* ali_global_logfile = NULL;
 AliLogLevel ali_global_loglevel = LOG_INFO;
 
-void ali_init_global_log() {
-	ali_global_logfile = stdout;
-	ali_global_loglevel = LOG_INFO;
-}
-
 void ali_log_log(AliLogLevel level, const char* fmt, ...) {
-	ALI_ASSERT(ali_global_logfile != NULL);
+	if (ali_global_logfile == NULL) ali_global_logfile = stdout;
 
 	va_list args;
 	va_start(args, fmt);
@@ -832,7 +842,7 @@ void ali_sb_free(AliSb* self) {
 bool ali_sb_read_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "rb");
 	if (f == NULL) {
-		fprintf(stderr, "Couldn't read %s: %s\n", path, strerror(errno));
+		ali_log_error("Couldn't read %s: %s\n", path, strerror(errno));
 		return false;
 	}
 
@@ -851,7 +861,7 @@ bool ali_sb_read_file(AliSb* self, const char* path) {
 bool ali_sb_write_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "wb");
 	if (f == NULL) {
-		fprintf(stderr, "Couldn't write to %s: %s\n", path, strerror(errno));
+		ali_log_error("Couldn't write to %s: %s\n", path, strerror(errno));
 		return false;
 	}
 
@@ -862,6 +872,71 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 }
 
 // ali_sb end
+
+// ali_measure
+
+double ali_get_now() {
+	struct timespec ts;
+	ALI_ASSERT(clock_gettime(CLOCK_REALTIME, &ts) == 0);
+	return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
+
+typedef struct {
+	const char* name;
+
+	double start;
+
+	double total;
+	size_t count;
+}Measurement;
+
+static Measurement measurements[ALI_MEASUREMENTS_COUNT] = {0};
+static size_t measurements_count = 0;
+
+void ali_measurement_push(Measurement measurement) {
+	ALI_ASSERT(measurements_count < ALI_MEASUREMENTS_COUNT);
+	measurements[measurements_count++] = measurement;
+}
+
+Measurement* ali_find_measurement(const char* name) {
+	Measurement* found = NULL;
+
+	for (size_t i = 0; found == NULL && i < measurements_count; ++i) {
+		if (strcmp(measurements[i].name, name) == 0) {
+			found = &measurements[i];
+			break;
+		}
+	}
+
+	return found;
+}
+
+void ali_measure_start(const char* name) {
+	Measurement* found = ali_find_measurement(name);
+	if (found == NULL) {
+		Measurement measurement = { .name = name, .start = ali_get_now() };
+		ali_measurement_push(measurement);
+		return;
+	}
+
+	found->start = ali_get_now();
+}
+
+void ali_measure_end(const char* name) {
+	Measurement* found = ali_find_measurement(name);
+	ALI_ASSERT(found != NULL);
+
+	found->total += ali_get_now() - found->start;
+	found->count += 1;
+}
+
+void ali_print_measurements(void) {
+	for (size_t i = 0; i < measurements_count; ++i) {
+		ali_log_info("[ali_measure] %s: %lfs", measurements[i].name, measurements[i].total / measurements[i].count);
+	}
+}
+
+// ali_measure end
 
 #endif // ALI_IMPLEMENTATION
 
@@ -904,7 +979,6 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define global_logfile ali_global_logfile
 #define global_loglevel ali_global_loglevel
 
-#define init_global_log ali_init_global_log
 #define log_log ali_log_log
 
 #define log_info ali_log_info
@@ -1021,6 +1095,13 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 #define sb_read_file ali_sb_read_file
 #define sb_write_file ali_sb_write_file
 // ali_sb end
+
+// ali_measure
+#define measure_start ali_measure_start
+#define measure_end ali_measure_end
+
+#define print_measurements ali_print_measurements
+// ali_measure end
 
 #endif // ALI_REMOVE_PREFIX
 
