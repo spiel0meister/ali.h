@@ -80,7 +80,7 @@
 #define ALI_ABORT abort
 #endif // ALI_ABORT
 
-// ali_util
+// @module ali_util
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
 
@@ -102,9 +102,9 @@
 // 'path/to/file.c' -> 'file.c', '/path/to/dir' -> 'dir'
 const char* ali_path_name(const char* path);
 
-// ali_util end
+// @module ali_util end
 
-// ali_types
+// @module ali_types
 typedef uint8_t  ali_u8;
 typedef uint16_t ali_u16;
 typedef uint32_t ali_u32;
@@ -123,9 +123,9 @@ typedef double ali_f64;
 
 typedef ali_u64 ali_usize;
 typedef ali_i64 ali_isize;
-// ali_types end
+// @module ali_types end
 
-// ali_log
+// @module ali_log
 #ifndef ALI_NO_LOG
 typedef enum {
 	LOG_INFO = 0,
@@ -152,9 +152,9 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn printf
 #define ali_log_error(...) fprintf(stderr, __VA_ARGS__)
 #endif // ALI_NO_LOG
-// ali_log end
+// @module ali_log end
 
-// ali_da
+// @module ali_da
 #ifndef ALI_DA_DEFAULT_INIT_CAPACITY
 #define ALI_DA_DEFAULT_INIT_CAPACITY 8
 #endif // ALI_DA_DEFAULT_INIT_CAPACITY
@@ -186,9 +186,9 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 #define ali_da_for(da, iter_name) for (size_t iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
 
-// ali_da end
+// @module ali_da end
 
-// ali_temp_alloc
+// @module ali_temp_alloc
 #ifndef ALI_TEMP_BUF_SIZE
 #define ALI_TEMP_BUF_SIZE (8 << 20)
 #endif // ALI_TEMP_BUF_SIZE
@@ -201,9 +201,9 @@ void ali_temp_reset(void);
 
 void* ali_temp_memdup(void* data, ali_usize data_size);
 
-// ali_temp_alloc end
+// @module ali_temp_alloc end
 
-// ali_arena 
+// @module ali_arena 
 #ifndef ALI_REGION_DEFAULT_CAP
 #define ALI_REGION_DEFAULT_CAP (4 << 10)
 #endif // ALI_REGION_DEFAULT_CAP
@@ -239,9 +239,9 @@ AliArenaMark ali_arena_mark(AliArena* self);
 void ali_arena_rollback(AliArena* self, AliArenaMark mark);
 void ali_arena_reset(AliArena* self);
 void ali_arena_free(AliArena* self);
-// ali_arena end
+// @module ali_arena end
 
-// ali_utf8
+// @module ali_utf8
 typedef ali_u8 ali_utf8;
 typedef ali_u32 ali_utf8codepoint;
 
@@ -262,9 +262,9 @@ ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len)
 #define ali_free_utf8 ALI_FREE
 #define ali_free_codepoints ALI_FREE
 
-// ali_utf8 end
+// @module ali_utf8 end
 
-// ali_sv
+// @module ali_sv
 typedef struct {
 	char* start;
 	size_t len;
@@ -295,7 +295,7 @@ bool ali_sv_ends_with(AliSv self, AliSv suffix);
 
 char* ali_temp_sv_to_cstr(AliSv sv);
 
-// ali_sv end
+// @module ali_sv end
 
 // @module ali_sb
 typedef struct {
@@ -319,7 +319,7 @@ bool ali_sb_write_file(AliSb* self, const char* path);
 
 // @module ali_sb end
 
-// ali_measure
+// @module ali_measure
 double ali_get_now();
 
 #ifndef ALI_MEASUREMENTS_COUNT
@@ -330,9 +330,9 @@ void ali_measure_start(const char* name);
 void ali_measure_end(const char* name);
 
 void ali_print_measurements(void);
-// ali_measure end
+// @module ali_measure end
 
-// ali_math
+// @module ali_math
 
 ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t);
 ali_f32 ali_normalizef(ali_f32 start, ali_f32 end, ali_f32 value);
@@ -340,9 +340,9 @@ ali_u64 ali_rotl64(ali_u64 x, ali_u8 k);
 
 ali_f32 ali_quadbezierf(ali_f32 start, ali_f32 end, ali_f32 control, ali_f32 t);
 ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 control2, ali_f32 t);
-// ali_math end
+// @module ali_math end
 
-// ali_rand
+// @module ali_rand
 
 typedef struct {
 	ali_u64 state[4];
@@ -353,8 +353,10 @@ void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]);
 
 ali_u64 ali_rand();
 ali_u64* ali_temp_rand_sequence(ali_usize count);
+ali_f64 ali_rand_float();
+ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 
-// ali_rand end
+// @module ali_rand end
 
 #endif // ALI_H_
 
@@ -366,16 +368,16 @@ ali_u64* ali_temp_rand_sequence(ali_usize count);
 #include <ctype.h>
 #include <errno.h>
 
-// ali_util
+// @module ali_util
 
 const char* ali_path_name(const char* path) {
 	const char* slash = strrchr(path, '/');
 	return slash != NULL ? slash + 1 : path;
 }
 
-// ali_util end
+// @module ali_util end
 
-// ali_log
+// @module ali_log
 #ifndef ALI_NO_LOG
 
 static_assert(LOG_COUNT_ == 3, "Log level was added");
@@ -403,9 +405,9 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 	va_end(args);
 }
 #endif // ALI_LOG_END
-// ali_log end
+// @module ali_log end
 
-// ali_da
+// @module ali_da
 AliDaHeader* ali_da_new_header_with_size(size_t init_capacity, size_t item_size) {
 	AliDaHeader* h = ALI_MALLOC(sizeof(*h) + item_size * init_capacity);
 	h->count = 0;
@@ -440,9 +442,9 @@ void* ali_da_free_with_size(void* da, size_t item_size) {
 	return (da = NULL);
 }
 
-// ali_da end
+// @module ali_da end
 
-// ali_temp_alloc
+// @module ali_temp_alloc
 
 static ali_u8 ali_temp_buffer[ALI_TEMP_BUF_SIZE] = {0};
 static size_t ali_temp_buffer_size = 0;
@@ -492,9 +494,9 @@ void ali_temp_reset(void) {
 	ali_temp_buffer_size = 0;
 }
 
-// ali_temp_alloc end
+// @module ali_temp_alloc end
 
-// ali_arena
+// @module ali_arena
 
 AliRegion* ali_region_new(size_t capacity) {
 	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
@@ -591,9 +593,9 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
 	self->end = mark.r;
 }
 
-// ali_arena end
+// @module ali_arena end
 
-// ali_utf8
+// @module ali_utf8
 size_t ali_utf8len(const ali_utf8* utf8) {
 	size_t len = 0;
 	while (*utf8 != 0) {
@@ -718,9 +720,9 @@ ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len)
 	return out;
 }
 
-// ali_utf8 end
+// @module ali_utf8 end
 
-// ali_sv
+// @module ali_sv
 
 void ali_sv_step(AliSv* self) {
 	if (self->start == NULL || self->len == 0) return;
@@ -843,9 +845,9 @@ char* ali_temp_sv_to_cstr(AliSv sv) {
 	return out;
 }
 
-// ali_sv end
+// @module ali_sv end
 
-// ali_sb
+// @module ali_sb
 void ali_sb_maybe_resize(AliSb* self, size_t to_add) {
 	if (self->count + to_add >= self->capacity) {
 		while (self->count + to_add >= self->capacity) {
@@ -924,9 +926,9 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 	return true;
 }
 
-// ali_sb end
+// @module ali_sb end
 
-// ali_measure
+// @module ali_measure
 
 double ali_get_now() {
 	struct timespec ts;
@@ -989,9 +991,9 @@ void ali_print_measurements(void) {
 	}
 }
 
-// ali_measure end
+// @module ali_measure end
 
-// ali_math
+// @module ali_math
 
 ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t) {
 	return a + (b - a) * t;
@@ -1017,9 +1019,9 @@ ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 co
 	return ali_lerpf(a, b, t);
 }
 
-// ali_math end
+// @module ali_math end
 
-// ali_rand
+// @module ali_rand
 
 ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
 	ali_u64 *s = state->state;
@@ -1047,7 +1049,17 @@ ali_u64* ali_temp_rand_sequence(ali_usize count) {
 	return out;
 }
 
-AliXoshiro256ppState xoshiro_global_state = { { 1111, 235, 4554, 515 } };
+ali_f64 ali_rand_float() {
+    ali_u64 value = ali_rand();
+    return (ali_f64)value / (ali_f64)UINT64_MAX;
+}
+
+ali_u64 ali_rand_range(ali_u64 min, ali_u64 max) {
+    if (min > max) ALI_SWAP(ali_u64, &min, &max);
+    return ali_rand() % (max - min) + min;
+}
+
+AliXoshiro256ppState xoshiro_global_state = { { 0x96EA83C1, 0x218B21E5, 0xAA91FEBD, 0x976414D4 } };
 
 ali_u64 ali_rand() {
 	return ali_xoshiro256pp_next(&xoshiro_global_state);
@@ -1055,14 +1067,14 @@ ali_u64 ali_rand() {
 
 #define ali_srand(seed) ali_xoshiro256pp_seed(&xoshiro_global_state, seed)
 
-// ali_rand end
+// @module ali_rand end
 
 #endif // ALI_IMPLEMENTATION
 
 #ifdef ALI_REMOVE_PREFIX
 #undef ALI_REMOVE_PREFIX
 
-// ali_util
+// @module ali_util
 #define ARRAY_LEN ALI_ARRAY_LEN
 #define INLINE_ARRAY ALI_INLINE_ARRAY
 
@@ -1078,9 +1090,9 @@ ali_u64 ali_rand() {
 #define SWAP ALI_SWAP
 
 #define path_name ali_path_name
-// ali_util end
+// @module ali_util end
 
-// ali_types
+// @module ali_types
 #define u8 ali_u8
 #define u16 ali_u16
 #define u32 ali_u32
@@ -1099,9 +1111,9 @@ ali_u64 ali_rand() {
 
 #define usize ali_usize
 #define isize ali_isize
-// ali_types end
+// @module ali_types end
 
-// ali_log
+// @module ali_log
 
 #define global_logfile ali_global_logfile
 #define global_loglevel ali_global_loglevel
@@ -1112,9 +1124,9 @@ ali_u64 ali_rand() {
 #define log_warn ali_log_warn
 #define log_error ali_log_error
 
-// ali_log end
+// @module ali_log end
 
-// ali_da
+// @module ali_da
 #define da_new_header_with_size ali_da_new_header_with_size
 #define da_get_header_with_size ali_da_get_header_with_size
 #define da_maybe_resize_with_size ali_da_maybe_resize_with_size
@@ -1135,9 +1147,9 @@ ali_u64 ali_rand() {
 
 #define da_for ali_da_for
 #define da_foreach ali_da_foreach
-// ali_da end
+// @module ali_da end
 
-// ali_temp_alloc
+// @module ali_temp_alloc
 
 #define temp_alloc ali_temp_alloc
 #define temp_memdup ali_temp_memdup
@@ -1147,9 +1159,9 @@ ali_u64 ali_rand() {
 #define temp_rewind ali_temp_rewind
 #define temp_reset ali_temp_reset
 
-// ali_temp_alloc end
+// @module ali_temp_alloc end
 
-// ali_arena
+// @module ali_arena
 #define region_new ali_region_new
 #define region_alloc ali_region_alloc
 
@@ -1162,9 +1174,9 @@ ali_u64 ali_rand() {
 #define arena_rollback ali_arena_rollback
 #define arena_reset ali_arena_reset
 #define arena_free ali_arena_free
-// ali_arena end
+// @module ali_arena end
 
-// ali_utf8
+// @module ali_utf8
 // NOTE: we mustn't do this
 // #define utf8 ali_utf8
 #define utf8codepoint ali_utf8codepoint
@@ -1182,9 +1194,9 @@ ali_u64 ali_rand() {
 
 #define temp_utf8_to_codepoints ali_temp_utf8_to_codepoints
 #define temp_codepoints_to_utf8 ali_temp_codepoints_to_utf8
-// ali_utf8 end
+// @module ali_utf8 end
 
-// ali_sv
+// @module ali_sv
 #define SV_FMT ALI_SV_FMT
 #define SV_F ALI_SV_F
 
@@ -1209,9 +1221,9 @@ ali_u64 ali_rand() {
 #define sv_ends_with ali_sv_ends_with
 
 #define temp_sv_to_cstr ali_temp_sv_to_cstr
-// ali_sv end
+// @module ali_sv end
 
-// ali_sb
+// @module ali_sb
 #define sb_maybe_resize ali_sb_maybe_resize
 #define sb_push_strs_null ali_sb_push_strs_null
 #define sb_push_sprintf ali_sb_push_sprintf
@@ -1222,14 +1234,14 @@ ali_u64 ali_rand() {
 
 #define sb_read_file ali_sb_read_file
 #define sb_write_file ali_sb_write_file
-// ali_sb end
+// @module ali_sb end
 
-// ali_measure
+// @module ali_measure
 #define measure_start ali_measure_start
 #define measure_end ali_measure_end
 
 #define print_measurements ali_print_measurements
-// ali_measure end
+// @module ali_measure end
 
 #endif // ALI_REMOVE_PREFIX
 
