@@ -4,9 +4,9 @@
 		- some util stuff (ali_util)
 		- some simple types and aliases (ali_types)
 		- logging (ali_log)
+		- arena (ali_arena)
 		- dynamic array (ali_da)
 		- temp allocator (ali_temp_alloc)
-		- arena (ali_arena)
 		- utf8 (ali_utf8)
 		- string view (ali_sv)
 		- string builder (ali_sb)
@@ -154,6 +154,44 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #endif // ALI_NO_LOG
 // @module ali_log end
 
+// @module ali_arena 
+#ifndef ALI_REGION_DEFAULT_CAP
+#define ALI_REGION_DEFAULT_CAP (4 << 10)
+#endif // ALI_REGION_DEFAULT_CAP
+
+typedef struct AliRegion {
+	size_t count;
+	size_t capacity;
+	struct AliRegion* next;
+
+	ali_u8 data[];
+}AliRegion;
+
+typedef struct {
+	AliRegion *start, *end;
+}AliArena;
+
+typedef struct {
+	AliRegion* r;
+	size_t count;
+}AliArenaMark;
+
+AliRegion* ali_region_new(size_t capacity);
+void* ali_region_alloc(AliRegion* self, size_t size);
+
+void* ali_arena_alloc(AliArena* self, size_t size);
+void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
+char* ali_arena_strdup(AliArena* self, const char* cstr);
+
+ALI_FORMAT_ATTRIBUTE(2, 3)
+char* ali_arena_sprintf(AliArena* self, const char* fmt, ...);
+
+AliArenaMark ali_arena_mark(AliArena* self);
+void ali_arena_rollback(AliArena* self, AliArenaMark mark);
+void ali_arena_reset(AliArena* self);
+void ali_arena_free(AliArena* self);
+// @module ali_arena end
+
 // @module ali_da
 #ifndef ALI_DA_DEFAULT_INIT_CAPACITY
 #define ALI_DA_DEFAULT_INIT_CAPACITY 8
@@ -203,44 +241,6 @@ void* ali_temp_memdup(void* data, ali_usize data_size);
 
 // @module ali_temp_alloc end
 
-// @module ali_arena 
-#ifndef ALI_REGION_DEFAULT_CAP
-#define ALI_REGION_DEFAULT_CAP (4 << 10)
-#endif // ALI_REGION_DEFAULT_CAP
-
-typedef struct AliRegion {
-	size_t count;
-	size_t capacity;
-	struct AliRegion* next;
-
-	ali_u8 data[];
-}AliRegion;
-
-typedef struct {
-	AliRegion *start, *end;
-}AliArena;
-
-typedef struct {
-	AliRegion* r;
-	size_t count;
-}AliArenaMark;
-
-AliRegion* ali_region_new(size_t capacity);
-void* ali_region_alloc(AliRegion* self, size_t size);
-
-void* ali_arena_alloc(AliArena* self, size_t size);
-void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
-char* ali_arena_strdup(AliArena* self, const char* cstr);
-
-ALI_FORMAT_ATTRIBUTE(2, 3)
-char* ali_arena_sprintf(AliArena* self, const char* fmt, ...);
-
-AliArenaMark ali_arena_mark(AliArena* self);
-void ali_arena_rollback(AliArena* self, AliArenaMark mark);
-void ali_arena_reset(AliArena* self);
-void ali_arena_free(AliArena* self);
-// @module ali_arena end
-
 // @module ali_utf8
 typedef ali_u8 ali_utf8;
 typedef ali_u32 ali_utf8codepoint;
@@ -249,12 +249,12 @@ typedef ali_u32 ali_utf8codepoint;
 
 size_t ali_utf8len(const ali_utf8* utf8);
 ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, size_t* codepoint_size);
-ali_utf8codepoint* ali_utf8_to_codepoints(const ali_utf8* utf8, size_t* count);
+ali_utf8codepoint* ali_utf8_to_codepoints(AliArena* arena, const ali_utf8* utf8, size_t* count);
 
 bool ali_is_codepoint_valid(ali_utf8codepoint codepoint);
 size_t ali_codepoint_size(ali_utf8codepoint codepoint);
 const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint);
-ali_utf8* ali_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len);
+ali_utf8* ali_codepoints_to_utf8(AliArena* arena, ali_utf8codepoint* codepoints, size_t len);
 
 ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, size_t* count);
 ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len);
@@ -407,6 +407,107 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 #endif // ALI_LOG_END
 // @module ali_log end
 
+// @module ali_arena
+
+AliRegion* ali_region_new(size_t capacity) {
+	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
+	ALI_ASSERT(new != NULL);
+	new->count = 0;
+	new->capacity = capacity;
+	new->next = NULL;
+	return new;
+}
+
+void* ali_region_alloc(AliRegion* self, size_t size) {
+	if (self->count + size >= self->capacity) return NULL;
+	void* ptr = self->data + self->count;
+	self->count += size;
+	return ptr;
+}
+
+void* ali_arena_alloc(AliArena* self, size_t size) {
+    if (self == NULL) return ALI_MALLOC(size);
+
+	if (self->start == NULL) {
+		self->start = ali_region_new(ALI_REGION_DEFAULT_CAP);
+		self->end = self->start;
+	}
+
+	AliRegion* region = self->end;
+	void* ptr;
+	do {
+		ptr = ali_region_alloc(region, size);
+		if (ptr == NULL) {
+			if (region->next == NULL) {
+				region->next = ali_region_new(ALI_REGION_DEFAULT_CAP);
+			}
+			region = region->next;
+		}
+	} while (ptr == NULL);
+	self->end = region;
+
+	return ptr;
+}
+
+void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes) {
+	void* data = ali_arena_alloc(self, size_bytes);
+	ALI_MEMCPY(data, mem, size_bytes);
+	return data;
+}
+
+char* ali_arena_strdup(AliArena* self, const char* cstr) {
+	return ali_arena_memdup(self, cstr, strlen(cstr) + 1);
+}
+
+char* ali_arena_sprintf(AliArena* self, const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+
+	char* out;
+	ALI_ASSERT(vasprintf(&out, fmt, args) >= 0);
+	char* real_out = ali_arena_strdup(self, out);
+	ALI_FREE(out);
+
+	va_end(args);
+	return real_out;
+}
+
+void ali_arena_reset(AliArena* self) {
+	for (AliRegion* r = self->start; r != NULL; r = r->next) {
+		r->count = 0;
+	}
+	self->end = self->start;
+}
+
+void ali_arena_free(AliArena* self) {
+	while (self->start != NULL) {
+		AliRegion* next = self->start->next;
+		ALI_FREE(self->start);
+		self->start = next;
+	}
+	self->end = NULL;
+}
+
+AliArenaMark ali_arena_mark(AliArena* self) {
+	return (AliArenaMark) { self->end, self->end->count };
+}
+
+void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
+	if (mark.r == NULL) {
+		ali_arena_reset(self);
+		return;
+	}
+
+	mark.r->count = mark.count;
+	for (AliRegion* r = mark.r; r != NULL; r = r->next) {
+		r->count = 0;
+	}
+
+	self->end = mark.r;
+}
+
+// @module ali_arena end
+
 // @module ali_da
 AliDaHeader* ali_da_new_header_with_size(size_t init_capacity, size_t item_size) {
 	AliDaHeader* h = ALI_MALLOC(sizeof(*h) + item_size * init_capacity);
@@ -496,105 +597,6 @@ void ali_temp_reset(void) {
 
 // @module ali_temp_alloc end
 
-// @module ali_arena
-
-AliRegion* ali_region_new(size_t capacity) {
-	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
-	ALI_ASSERT(new != NULL);
-	new->count = 0;
-	new->capacity = capacity;
-	new->next = NULL;
-	return new;
-}
-
-void* ali_region_alloc(AliRegion* self, size_t size) {
-	if (self->count + size >= self->capacity) return NULL;
-	void* ptr = self->data + self->count;
-	self->count += size;
-	return ptr;
-}
-
-void* ali_arena_alloc(AliArena* self, size_t size) {
-	if (self->start == NULL) {
-		self->start = ali_region_new(ALI_REGION_DEFAULT_CAP);
-		self->end = self->start;
-	}
-
-	AliRegion* region = self->end;
-	void* ptr;
-	do {
-		ptr = ali_region_alloc(region, size);
-		if (ptr == NULL) {
-			if (region->next == NULL) {
-				region->next = ali_region_new(ALI_REGION_DEFAULT_CAP);
-			}
-			region = region->next;
-		}
-	} while (ptr == NULL);
-	self->end = region;
-
-	return ptr;
-}
-
-void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes) {
-	void* data = ali_arena_alloc(self, size_bytes);
-	ALI_MEMCPY(data, mem, size_bytes);
-	return data;
-}
-
-char* ali_arena_strdup(AliArena* self, const char* cstr) {
-	return ali_arena_memdup(self, cstr, strlen(cstr) + 1);
-}
-
-char* ali_arena_sprintf(AliArena* self, const char* fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-
-	char* out;
-	ALI_ASSERT(vasprintf(&out, fmt, args) >= 0);
-	char* real_out = ali_arena_strdup(self, out);
-	ALI_FREE(out);
-
-	va_end(args);
-	return real_out;
-}
-
-void ali_arena_reset(AliArena* self) {
-	for (AliRegion* r = self->start; r != NULL; r = r->next) {
-		r->count = 0;
-	}
-	self->end = self->start;
-}
-
-void ali_arena_free(AliArena* self) {
-	while (self->start != NULL) {
-		AliRegion* next = self->start->next;
-		ALI_FREE(self->start);
-		self->start = next;
-	}
-	self->end = NULL;
-}
-
-AliArenaMark ali_arena_mark(AliArena* self) {
-	return (AliArenaMark) { self->end, self->end->count };
-}
-
-void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
-	if (mark.r == NULL) {
-		ali_arena_reset(self);
-		return;
-	}
-
-	mark.r->count = mark.count;
-	for (AliRegion* r = mark.r; r != NULL; r = r->next) {
-		r->count = 0;
-	}
-
-	self->end = mark.r;
-}
-
-// @module ali_arena end
-
 // @module ali_utf8
 size_t ali_utf8len(const ali_utf8* utf8) {
 	size_t len = 0;
@@ -637,11 +639,11 @@ ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, size_t* codepoin
 	return codepoint;
 }
 
-ali_utf8codepoint* ali_utf8_to_codepoints(const ali_utf8* utf8, size_t* count) {
+ali_utf8codepoint* ali_utf8_to_codepoints(AliArena* arena, const ali_utf8* utf8, size_t* count) {
 	size_t len = ali_utf8len(utf8);
 	*count = len;
 
-	ali_utf8codepoint* codepoints = ALI_MALLOC(len * sizeof(*codepoints));
+	ali_utf8codepoint* codepoints = ali_arena_alloc(arena, len * sizeof(*codepoints));
 	len = 0;
 	while (*utf8 != 0) {
 		size_t codepoint_size = 0;
@@ -687,13 +689,13 @@ static ali_utf8 utf8[5] = {0};
 	return utf8;
 }
 
-ali_utf8* ali_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len) {
+ali_utf8* ali_codepoints_to_utf8(AliArena* arena, ali_utf8codepoint* codepoints, size_t len) {
 	size_t real_len = 0;
 	for (size_t i = 0; i < len; ++i) {
 		real_len += ali_codepoint_size(codepoints[i]);
 	}
 
-	ali_utf8* utf8 = ALI_MALLOC(real_len + 1);
+	ali_utf8* utf8 = ali_arena_alloc(arena, real_len + 1);
 	ali_utf8* utf8p = utf8;
 	for (size_t i = 0; i < len; ++i) {
 		size_t codepoint_size = ali_codepoint_size(codepoints[i]);
@@ -706,7 +708,7 @@ ali_utf8* ali_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len) {
 }
 
 ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, size_t* count) {
-	ali_utf8codepoint* codepoints = ali_utf8_to_codepoints(utf8, count);
+	ali_utf8codepoint* codepoints = ali_utf8_to_codepoints(NULL, utf8, count);
 	ali_utf8codepoint* out = ali_temp_alloc(sizeof(*out) * (*count));
 	ALI_MEMCPY(out, codepoints, sizeof(*out) * (*count));
 	ali_free_codepoints(codepoints);
@@ -714,7 +716,7 @@ ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, size_t* cou
 }
 
 ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len) {
-	ali_utf8* utf8 = ali_codepoints_to_utf8(codepoints, len);
+	ali_utf8* utf8 = ali_codepoints_to_utf8(NULL, codepoints, len);
 	ali_utf8* out = (ali_utf8*)ali_temp_strdup((char*)utf8);
 	ali_free_utf8(utf8);
 	return out;
