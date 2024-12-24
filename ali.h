@@ -4,6 +4,7 @@
 		- some util stuff (ali_util)
 		- some simple types and aliases (ali_types)
 		- logging (ali_log)
+        - cli flags parsing (ali_flag)
 		- arena (ali_arena)
 		- dynamic array (ali_da)
 		- temp allocator (ali_temp_alloc)
@@ -102,6 +103,7 @@
 
 // 'path/to/file.c' -> 'file.c', '/path/to/dir' -> 'dir'
 const char* ali_path_name(const char* path);
+char* ali_shift_args(int* argc, char*** argv);
 
 // @module ali_util end
 
@@ -154,6 +156,39 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_log_error(...) fprintf(stderr, __VA_ARGS__)
 #endif // ALI_NO_LOG
 // @module ali_log end
+
+// @module ali_flag
+
+typedef enum {
+    FLAG_STRING = 0,
+    FLAG_U64,
+    FLAG_F64,
+    FLAG_OPTION,
+}FlagType;
+typedef union {
+    const char* string;
+    ali_u64 num_u64;
+    ali_f64 num_f64;
+    bool option;
+}FlagAs;
+
+typedef struct {
+    const char* name;
+    const char* description;
+
+    FlagType type;
+    FlagAs as;
+}AliFlag;
+
+const char** ali_flag_string(const char* name, const char* desc, const char* default_);
+ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_);
+ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_);
+bool* ali_flag_option(const char* name, const char* desc, bool default_);
+
+void ali_flag_print_help(FILE* sink);
+ali_isize ali_flag_parse(int argc, char** argv);
+
+// @module ali_flag end
 
 // @module ali_arena 
 #ifndef ALI_REGION_DEFAULT_CAP
@@ -451,6 +486,14 @@ const char* ali_path_name(const char* path) {
 	return slash != NULL ? slash + 1 : path;
 }
 
+char* ali_shift_args(int* argc, char*** argv) {
+    if (*argc < 1) return NULL;
+    char* arg = **argv;
+    (*argv)++;
+    (*argc)--;
+    return arg;
+}
+
 // @module ali_util end
 
 // @module ali_log
@@ -482,6 +525,128 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 }
 #endif // ALI_LOG_END
 // @module ali_log end
+
+// @module ali_flag
+#define ALI_FLAG_LIST_MAX_SIZE 128
+AliFlag ali_flag_list[ALI_FLAG_LIST_MAX_SIZE] = {0};
+ali_usize ali_flag_list_size = 0;
+
+AliFlag* ali_flag_push(AliFlag flag) {
+     AliFlag* flag_ = &ali_flag_list[ali_flag_list_size++];
+     *flag_ = flag;
+     return flag_;
+}
+
+const char** ali_flag_string(const char* name, const char* desc, const char* default_) {
+    AliFlag flag = {
+        .name = name,
+        .description = desc,
+        .type = FLAG_STRING,
+        .as.string = default_,
+    };
+
+    AliFlag* pushed_flag = ali_flag_push(flag);
+    return &pushed_flag->as.string;
+}
+
+ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_) {
+    AliFlag flag = {
+        .name = name,
+        .description = desc,
+        .type = FLAG_U64,
+        .as.num_u64 = default_,
+    };
+
+    AliFlag* pushed_flag = ali_flag_push(flag);
+    return &pushed_flag->as.num_u64;
+}
+
+ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_) {
+    AliFlag flag = {
+        .name = name,
+        .description = desc,
+        .type = FLAG_F64,
+        .as.num_f64 = default_,
+    };
+
+    AliFlag* pushed_flag = ali_flag_push(flag);
+    return &pushed_flag->as.num_f64;
+}
+
+bool* ali_flag_option(const char* name, const char* desc, bool default_) {
+    AliFlag flag = {
+        .name = name,
+        .description = desc,
+        .type = FLAG_OPTION,
+        .as.option = default_,
+    };
+
+    AliFlag* pushed_flag = ali_flag_push(flag);
+    return &pushed_flag->as.option;
+}
+
+void ali_flag_print_help(FILE* sink) {
+    for (ali_usize i = 0; i < ali_flag_list_size; ++i) {
+        AliFlag* flag = &ali_flag_list[i];
+        fprintf(sink, "%s:\n", flag->name);
+        fprintf(sink, "    %s\n", flag->description);
+    }
+}
+
+ali_isize ali_flag_parse(int argc, char** argv) {
+    char* program = ali_shift_args(&argc, &argv);
+    ALI_UNUSED(program);
+
+while_loop: while (argc > 0) {
+        char* arg = ali_shift_args(&argc, &argv);
+
+        if (*arg == '-') {
+            for (ali_usize j = 0; j < ali_flag_list_size; ++j) {
+                if (strcmp(arg, ali_flag_list[j].name) == 0) {
+                    switch (ali_flag_list[j].type) {
+                        case FLAG_STRING:
+                            if (argc == 0) {
+                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                return -1;
+                            }
+                            ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
+                            break;
+                        case FLAG_U64:
+                            if (argc == 0) {
+                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                return -1;
+                            }
+                            ali_flag_list[j].as.num_u64 = atol(ali_shift_args(&argc, &argv));
+                            break;
+                        case FLAG_F64:
+                            if (argc == 0) {
+                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                return -1;
+                            }
+                            char* endptr;
+                            ali_flag_list[j].as.num_f64 = strtod(ali_shift_args(&argc, &argv), &endptr);
+                            break;
+                        case FLAG_OPTION:
+                            ali_flag_list[j].as.option = true;
+                            break;
+                    }
+                    goto while_loop;
+                }
+            }
+
+            if (strcmp(arg, "-h") == 0) {
+                ali_flag_print_help(stdout);
+                exit(0);
+            }
+        } else {
+            return (ali_isize)argc;
+        }
+    }
+
+    return (ali_isize)argc;
+}
+
+// @module ali_flag end
 
 // @module ali_arena
 
@@ -1395,6 +1560,18 @@ void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
 #define log_error ali_log_error
 
 // @module ali_log end
+
+// @module ali_flag
+
+#define flag_string ali_flag_string
+#define flag_u64 ali_flag_u64
+#define flag_f64 ali_flag_f64
+#define flag_option ali_flag_option
+
+#define flag_print_help ali_flag_print_help
+#define flag_parse ali_flag_parse
+
+// @module ali_flag end
 
 // @module ali_da
 #define da_new_header_with_size ali_da_new_header_with_size
