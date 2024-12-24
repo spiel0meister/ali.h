@@ -378,7 +378,7 @@ ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 #define ali_cmd_shallow_append_arg ali_da_shallow_append
 
 void ali_cmd_append_args_(char*** cmd, ...);
-#define ali_cmd_push_args(...) ali_cmd_append_args_(__VA_ARGS__, NULL)
+#define ali_cmd_append_args(...) ali_cmd_append_args_(__VA_ARGS__, NULL)
 
 char* ali_cmd_render(char** cmd);
 pid_t ali_cmd_run_async(char** cmd);
@@ -394,26 +394,43 @@ bool ali_needs_rebuild1(const char* output, const char* input);
     const char* dst = argv[0]; \
     if (ali_needs_rebuild1(dst, src)) { \
         const char* old_dst = temp_sprintf("%s.prev", dst); \
-        cmd_push_args(cmd, "mv", dst, old_dst); \
+        ali_cmd_append_args(cmd, "mv", dst, old_dst); \
         \
-        if (!cmd_run_sync_and_reset(*(cmd))) { \
-            cmd_push_args(cmd, "mv", old_dst, dst); \
-            cmd_run_sync_and_reset(*(cmd)); \
+        if (!ali_cmd_run_sync_and_reset(*(cmd))) { \
+            ali_cmd_append_args(cmd, "mv", old_dst, dst); \
+            ali_cmd_run_sync_and_reset(*(cmd)); \
             exit(1); \
         } \
-        cmd_push_args(cmd, "gcc", "-o", dst, src); \
-        if (!cmd_run_sync_and_reset(*(cmd))) { \
-            cmd_push_args(cmd, "mv", old_dst, dst); \
-            cmd_run_sync_and_reset(*(cmd)); \
+        ali_cmd_append_args(cmd, "gcc", "-o", dst, src); \
+        if (!ali_cmd_run_sync_and_reset(*(cmd))) { \
+            ali_cmd_append_args(cmd, "mv", old_dst, dst); \
+            ali_cmd_run_sync_and_reset(*(cmd)); \
             exit(1); \
         } \
-        cmd_push_args(cmd, dst); \
+        ali_cmd_append_args(cmd, dst); \
         for(ali_isize i = 1; i < argc; ++i) { ali_cmd_append_arg(*(cmd), argv[i]); } \
-        if (!cmd_run_sync_and_reset(*(cmd))) exit(1); \
+        if (!ali_cmd_run_sync_and_reset(*(cmd))) exit(1); \
         exit(0); \
     } \
 } while (0)
 
+typedef struct {
+    char* cc;
+    char* target;
+    char** srcs;
+    char** cflags;
+    char** libs;
+}CexeBuilder;
+
+CexeBuilder ali_c_exe(char* target, char* src);
+
+#define ali_c_exe_add_flag(exe, flag) ali_da_append((exe)->cflags, flag)
+#define ali_c_exe_add_linker_flag(exe, flag) ali_da_append((exe)->cflags, ali_temp_sprintf("-Wl,%s", flag))
+#define ali_c_exe_add_library(exe, library) ali_da_append((exe)->libs, library)
+#define ali_c_exe_add_src(exe, src) ali_da_append((exe)->srcs, src)
+
+bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe);
+void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src);
 
 // @module ali_cmd end
 
@@ -455,7 +472,7 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
 
-	if (ali_global_loglevel >= level) {
+	if (ali_global_loglevel <= level) {
 		fprintf(ali_global_logfile, "[%s] ", loglevel_to_str[level]);
 		vfprintf(ali_global_logfile, fmt, args);
 		fprintf(ali_global_logfile, "\n");
@@ -1267,6 +1284,59 @@ bool ali_needs_rebuild1(const char* output, const char* input) {
     return ali_needs_rebuild(output, &input, 1);
 }
 
+CexeBuilder ali_c_exe(char* target, char* src) {
+    CexeBuilder exe = {0};
+#ifdef __GNUC__
+    exe.cc = "gcc";
+#elif defined(__clang__)
+    exe.cc = "clang";
+#else
+#error "Unsupported compiler"
+#endif
+    exe.target = target;
+    if (src != NULL) {
+        ali_da_append(exe.srcs, src);
+    }
+    return exe;
+}
+
+bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe) {
+    if (ali_da_getlen(exe->srcs) == 0) {
+        ali_log_error("CexeBuilder needs at least one source file");
+        return false;
+    }
+
+    if (ali_needs_rebuild(exe->target, (const char**)exe->srcs, ali_da_getlen(exe->srcs))) {
+        ali_cmd_append_arg(*cmd, exe->cc);
+        for (ali_usize i = 0; i < ali_da_getlen(exe->cflags); ++i) {
+            ali_cmd_append_arg(*cmd, exe->cflags[i]);
+        }
+        ali_cmd_append_arg(*cmd, "-o");
+        ali_cmd_append_arg(*cmd, exe->target);
+        for (ali_usize i = 0; i < ali_da_getlen(exe->srcs); ++i) {
+            ali_cmd_append_arg(*cmd, exe->srcs[i]);
+        }
+        for (ali_usize i = 0; i < ali_da_getlen(exe->libs); ++i) {
+            ali_cmd_append_arg(*cmd, exe->libs[i]);
+        }
+        return ali_cmd_run_sync_and_reset(*cmd);
+    }
+
+    return true;
+}
+
+void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
+    exe->target = target;
+
+    ali_da_get_header(exe->srcs)->count = 0;
+    ali_da_get_header(exe->cflags)->count = 0;
+    ali_da_get_header(exe->libs)->count = 0;
+    if (src != NULL) {
+        ali_da_append(exe->srcs, src);
+    }
+}
+
+
 // @module ali_cmd end
 
 #endif // ALI_IMPLEMENTATION
@@ -1447,8 +1517,8 @@ bool ali_needs_rebuild1(const char* output, const char* input) {
 
 // @module ali_cmd
 
-#define cmd_push_arg ali_cmd_push_arg
-#define cmd_push_args ali_cmd_push_args
+#define cmd_append_arg ali_cmd_append_arg
+#define cmd_append_args ali_cmd_append_args
 #define wait_for_process ali_wait_for_process
 #define cmd_render ali_cmd_render
 #define cmd_run_async ali_cmd_run_async
@@ -1458,6 +1528,13 @@ bool ali_needs_rebuild1(const char* output, const char* input) {
 #define needs_rebuild ali_needs_rebuild
 #define needs_rebuild1 ali_needs_rebuild1
 #define rebuild_yourself ali_rebuild_yourself
+
+#define c_exe ali_c_exe
+#define c_exe_add_flag ali_c_exe_add_flag
+#define c_exe_add_src ali_c_exe_add_src
+#define c_exe_add_linker_flag ali_c_exe_add_linker_flag
+#define c_exe_execute ali_c_exe_execute
+#define c_exe_reset ali_c_exe_reset
 
 // @module ali_cmd end
 
