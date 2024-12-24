@@ -13,6 +13,7 @@
 		- measure code (ali_measure)
 		- math (ali_math)
 		- random numbers (ali_rand)
+        - cmd (ali_cmd)
 
 	This is a stb-style header file, which means you use this file like it's a normal
 	header file, ex.:
@@ -215,7 +216,13 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 
 #define ali_da_reset(da) (ALI_ASSERT((da) != NULL), ali_da_get_header(da)->count = 0)
 
-#define ali_da_append(da, item) ((da) = ali_da_maybe_resize(da, 1), (da)[ali_da_get_header_with_size(da, sizeof(*(da)))->count++] = item)
+#define ali_da_append(da, item) ((da) = ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count++] = item)
+#define ali_da_shallow_append(da, item) ((da) = ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count] = item)
+#define ali_da_append_many(da, items, item_count) do { \
+        (da) = ali_da_maybe_resize(da, item_count); \
+        memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
+        ali_da_get_header(da)->count += item_count; \
+    } while (0)
 
 #define ali_da_free(da) ((da) = ali_da_free_with_size(da, sizeof(*(da))))
 #define ali_da_remove_unordered(da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
@@ -232,12 +239,15 @@ void* ali_da_free_with_size(void* da, size_t item_size);
 #endif // ALI_TEMP_BUF_SIZE
 
 void* ali_temp_alloc(size_t size);
+void* ali_temp_memdup(void* data, ali_usize data_size);
 ALI_FORMAT_ATTRIBUTE(1, 2) char* ali_temp_sprintf(const char* fmt, ...);
+void* ali_temp_get_cur();
+void ali_temp_push(char c);
+void ali_temp_push_str(const char* str);
+
 size_t ali_temp_stamp(void);
 void ali_temp_rewind(size_t stamp);
 void ali_temp_reset(void);
-
-void* ali_temp_memdup(void* data, ali_usize data_size);
 
 // @module ali_temp_alloc end
 
@@ -357,6 +367,55 @@ ali_f64 ali_rand_float();
 ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 
 // @module ali_rand end
+
+// @module ali_cmd
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+
+#define ali_cmd_append_arg ali_da_append
+#define ali_cmd_shallow_append_arg ali_da_shallow_append
+
+void ali_cmd_append_args_(char*** cmd, ...);
+#define ali_cmd_push_args(...) ali_cmd_append_args_(__VA_ARGS__, NULL)
+
+char* ali_cmd_render(char** cmd);
+pid_t ali_cmd_run_async(char** cmd);
+bool ali_wait_for_process(pid_t pid);
+bool ali_cmd_run_sync(char** cmd);
+bool ali_cmd_run_sync_and_reset(char** cmd);
+
+bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count);
+bool ali_needs_rebuild1(const char* output, const char* input);
+
+#define ali_rebuild_yourself(cmd, argc, argv) do { \
+    const char* src = __FILE__; \
+    const char* dst = argv[0]; \
+    if (ali_needs_rebuild1(dst, src)) { \
+        const char* old_dst = temp_sprintf("%s.prev", dst); \
+        cmd_push_args(cmd, "mv", dst, old_dst); \
+        \
+        if (!cmd_run_sync_and_reset(*(cmd))) { \
+            cmd_push_args(cmd, "mv", old_dst, dst); \
+            cmd_run_sync_and_reset(*(cmd)); \
+            exit(1); \
+        } \
+        cmd_push_args(cmd, "gcc", "-o", dst, src); \
+        if (!cmd_run_sync_and_reset(*(cmd))) { \
+            cmd_push_args(cmd, "mv", old_dst, dst); \
+            cmd_run_sync_and_reset(*(cmd)); \
+            exit(1); \
+        } \
+        cmd_push_args(cmd, dst); \
+        for(ali_isize i = 1; i < argc; ++i) { ali_cmd_append_arg(*(cmd), argv[i]); } \
+        if (!cmd_run_sync_and_reset(*(cmd))) exit(1); \
+        exit(0); \
+    } \
+} while (0)
+
+
+// @module ali_cmd end
 
 #endif // ALI_H_
 
@@ -581,6 +640,22 @@ char* ali_temp_sprintf(const char* fmt, ...) {
 	va_end(args);
 
 	return out;
+}
+
+void* ali_temp_get_cur() {
+    return &ali_temp_buffer[ali_temp_buffer_size];
+}
+
+void ali_temp_push(char c) {
+    ALI_ASSERT(ali_temp_buffer_size < ALI_TEMP_BUF_SIZE);
+    ali_temp_buffer[ali_temp_buffer_size++] = c;
+}
+
+void ali_temp_push_str(const char* str) {
+    ali_usize len = strlen(str);
+    ALI_ASSERT(ali_temp_buffer_size + len < ALI_TEMP_BUF_SIZE);
+    ALI_MEMCPY(ali_temp_buffer + ali_temp_buffer_size, str, len);
+    ali_temp_buffer_size += len;
 }
 
 size_t ali_temp_stamp(void) {
@@ -1071,6 +1146,129 @@ ali_u64 ali_rand() {
 
 // @module ali_rand end
 
+// @module ali_cmd
+
+void ali_cmd_append_args_(char*** cmd, ...) {
+    va_list args;
+    va_start(args, cmd);
+
+    char* arg = va_arg(args, char*);
+    while (arg != NULL) {
+        ali_cmd_append_arg(*cmd, arg);
+        arg = va_arg(args, char*);
+    }
+
+    va_end(args);
+}
+
+char* ali_cmd_render(char** cmd) {
+    char* render = ali_temp_get_cur();
+
+    for (ali_usize i = 0; i < ali_da_getlen(cmd); ++i) {
+        char* arg = cmd[i];
+        if (arg == NULL) break;
+        if (i > 0) ali_temp_push(' ');
+        if (!strchr(arg, ' ')) {
+            ali_temp_push_str(arg);
+        } else {
+            ali_temp_push('\'');
+            ali_temp_push_str(arg);
+            ali_temp_push('\'');
+        }
+    }
+    ali_temp_push(0);
+
+    return render;
+}
+
+pid_t ali_cmd_run_async(char** cmd) {
+    ali_usize stamp = ali_temp_stamp();
+    char* render = ali_cmd_render(cmd);
+    ali_log_info("[CMD] %s", render);
+    ali_temp_rewind(stamp);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        ali_cmd_shallow_append_arg(cmd, NULL);
+        execvp(cmd[0], cmd);
+
+        ali_log_error("Couldn't start process: %s", strerror(errno));
+        exit(1);
+    } else if (pid < 0) {
+        ali_log_error("Couldn't fork: %s", strerror(errno));
+    }
+
+    return pid;
+}
+
+bool ali_wait_for_process(pid_t pid) {
+    for (;;) {
+        int wstatus;
+        if (waitpid(pid, &wstatus, 0) < 0) {
+            ali_log_error("Couldn't waitpid for %s", strerror(errno));
+            return false;
+        }
+
+        if (WIFEXITED(wstatus)) {
+            int estatus = WEXITSTATUS(wstatus);
+            if (estatus != 0) {
+                ali_log_error("Process %d exited with status %d", pid, estatus);
+                return false;
+            }
+
+            break;
+        }
+
+        if (WIFSIGNALED(wstatus)) {
+            int sig = WTERMSIG(wstatus);
+            ali_log_error("Process %d exited with signal %d (%s)", pid, sig, strsignal(sig));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ali_cmd_run_sync(char** cmd) {
+    pid_t pid = ali_cmd_run_async(cmd);
+    return ali_wait_for_process(pid);
+}
+
+bool ali_cmd_run_sync_and_reset(char** cmd) {
+    bool ret = ali_cmd_run_sync(cmd);
+    ali_da_get_header(cmd)->count = 0;
+    return ret;
+}
+
+bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count) {
+    struct stat st;
+
+    if (stat(output, &st) < 0) {
+        if (errno == ENOENT) return true;
+        ali_log_error("Couldn't stat %s: %s", output, strerror(errno));
+        return false;
+    }
+
+    struct timespec ts_output = st.st_mtim;
+
+    for (ali_usize i = 0; i < input_count; ++i) {
+        if (stat(inputs[i], &st) < 0) {
+            ali_log_error("Couldn't stat %s: %s", output, strerror(errno));
+            return false;
+        }
+
+        if (st.st_mtim.tv_sec > ts_output.tv_sec) return 1;
+    }
+
+    return false;
+}
+
+bool ali_needs_rebuild1(const char* output, const char* input) {
+    return ali_needs_rebuild(output, &input, 1);
+}
+
+// @module ali_cmd end
+
 #endif // ALI_IMPLEMENTATION
 
 #ifdef ALI_REMOVE_PREFIX
@@ -1140,6 +1338,8 @@ ali_u64 ali_rand() {
 #define da_getlen ali_da_getlen
 
 #define da_append ali_da_append
+#define da_shallow_append ali_da_shallow_append
+#define da_append_many ali_da_append_many
 #define da_free ali_da_free
 
 #define da_reset ali_da_reset
@@ -1244,6 +1444,22 @@ ali_u64 ali_rand() {
 
 #define print_measurements ali_print_measurements
 // @module ali_measure end
+
+// @module ali_cmd
+
+#define cmd_push_arg ali_cmd_push_arg
+#define cmd_push_args ali_cmd_push_args
+#define wait_for_process ali_wait_for_process
+#define cmd_render ali_cmd_render
+#define cmd_run_async ali_cmd_run_async
+#define cmd_run_sync ali_cmd_run_sync
+#define cmd_run_sync_and_reset ali_cmd_run_sync_and_reset
+
+#define needs_rebuild ali_needs_rebuild
+#define needs_rebuild1 ali_needs_rebuild1
+#define rebuild_yourself ali_rebuild_yourself
+
+// @module ali_cmd end
 
 #endif // ALI_REMOVE_PREFIX
 
