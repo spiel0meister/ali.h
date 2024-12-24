@@ -6,7 +6,7 @@ int main(int argc, char** argv) {
     char** cmd = NULL;
     rebuild_yourself(&cmd, argc, argv);
 
-    CexeBuilder exe = c_exe("main", NULL);
+    CexeBuilder exe = c_exe("main", "main.c");
     c_exe_add_flag(&exe, "-Wall");
     c_exe_add_flag(&exe, "-Wextra");
     c_exe_add_flag(&exe, "-Werror");
