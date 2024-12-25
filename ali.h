@@ -1709,6 +1709,7 @@ void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
 #define c_exe ali_c_exe
 #define c_exe_add_flag ali_c_exe_add_flag
 #define c_exe_add_src ali_c_exe_add_src
+#define c_exe_add_library ali_c_exe_add_library
 #define c_exe_add_linker_flag ali_c_exe_add_linker_flag
 #define c_exe_execute ali_c_exe_execute
 #define c_exe_reset ali_c_exe_reset
