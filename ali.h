@@ -426,22 +426,20 @@ bool ali_cmd_run_sync_and_reset(char** cmd);
 bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count);
 bool ali_needs_rebuild1(const char* output, const char* input);
 
+bool ali_rename(char*** cmd, const char* from, const char* to);
+bool ali_remove(char*** cmd, const char* path);
+
 #define ali_rebuild_yourself(cmd, argc, argv) do { \
     const char* src = __FILE__; \
     const char* dst = argv[0]; \
     if (ali_needs_rebuild1(dst, src)) { \
         const char* old_dst = temp_sprintf("%s.prev", dst); \
-        ali_cmd_append_args(cmd, "mv", dst, old_dst); \
-        \
-        if (!ali_cmd_run_sync_and_reset(*(cmd))) { \
-            ali_cmd_append_args(cmd, "mv", old_dst, dst); \
-            ali_cmd_run_sync_and_reset(*(cmd)); \
+        if (!ali_rename(cmd, dst, old_dst)) { \
             exit(1); \
         } \
-        ali_cmd_append_args(cmd, "gcc", "-o", dst, src); \
+        ali_cmd_append_args(cmd, "gcc", "-ggdb", "-o", dst, src); \
         if (!ali_cmd_run_sync_and_reset(*(cmd))) { \
-            ali_cmd_append_args(cmd, "mv", old_dst, dst); \
-            ali_cmd_run_sync_and_reset(*(cmd)); \
+            ali_rename(cmd, old_dst, dst); \
             exit(1); \
         } \
         ali_cmd_append_args(cmd, dst); \
@@ -451,26 +449,31 @@ bool ali_needs_rebuild1(const char* output, const char* input);
     } \
 } while (0)
 
+typedef enum {
+    C_EXE,
+    C_OBJ,
+    C_DYNLIB,
+    // TODO: implement
+    // C_STATICLIB,
+}AliCBuilderType;
+
 typedef struct {
+    AliCBuilderType type;
     char* cc;
     char* target;
     char** srcs;
     char** cflags;
     char** libs;
-}CexeBuilder;
+}AliCBuilder;
 
-CexeBuilder ali_c_exe(char* target, char* src);
-
-#define ali_c_exe_add_flag(exe, flag) ali_da_append((exe)->cflags, flag)
-#define ali_c_exe_add_linker_flag(exe, flag) ali_da_append((exe)->cflags, ali_temp_sprintf("-Wl,%s", flag))
-#define ali_c_exe_add_library(exe, library) ali_da_append((exe)->libs, library)
-#define ali_c_exe_add_src(exe, src) ali_da_append((exe)->srcs, src)
-
-void ali_c_exe_add_flags_(CexeBuilder* exe, ...);
-#define ali_c_exe_add_flags(exe, ...) c_exe_add_flags_(exe, __VA_ARGS__, NULL)
-
-bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe);
-void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src);
+void ali_c_builder_add_srcs_(AliCBuilder* builder, ...);
+#define ali_c_builder_add_srcs(...) ali_c_builder_add_srcs_(__VA_ARGS__, NULL)
+void ali_c_builder_add_libs_(AliCBuilder* builder, ...);
+#define ali_c_builder_add_libs(...) ali_c_builder_add_libs_(__VA_ARGS__, NULL)
+void ali_c_builder_add_flags_(AliCBuilder* builder, ...);
+#define ali_c_builder_add_flags(...) ali_c_builder_add_flags_(__VA_ARGS__, NULL)
+void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, char* target, char* src);
+bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd);
 
 // @module ali_cmd end
 
@@ -1455,7 +1458,7 @@ bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_
 
     for (ali_usize i = 0; i < input_count; ++i) {
         if (stat(inputs[i], &st) < 0) {
-            ali_log_error("Couldn't stat %s: %s", output, strerror(errno));
+            ali_log_error("Couldn't stat %s: %s", inputs[i], strerror(errno));
             return false;
         }
 
@@ -1469,69 +1472,114 @@ bool ali_needs_rebuild1(const char* output, const char* input) {
     return ali_needs_rebuild(output, &input, 1);
 }
 
-CexeBuilder ali_c_exe(char* target, char* src) {
-    CexeBuilder exe = {0};
-#ifdef __GNUC__
-    exe.cc = "gcc";
-#elif defined(__clang__)
-    exe.cc = "clang";
-#else
-#error "Unsupported compiler"
-#endif
-    exe.target = target;
-    if (src != NULL) {
-        ali_da_append(exe.srcs, src);
-    }
-    return exe;
-}
-
-void c_exe_add_flags_(CexeBuilder* exe, ...) {
+void ali_c_builder_add_srcs_(AliCBuilder* builder, ...) {
     va_list args;
-    va_start(args, exe);
-    while (1) {
-        char* flag = va_arg(args, char*);
-        if (flag == NULL) break;
-        ali_da_append(exe->cflags, flag);
-    }
+    va_start(args, builder);
+
+    char* src;
+    do {
+        src = va_arg(args, char*);
+        if (src != NULL) {
+            ali_da_append(builder->srcs, src);
+        }
+    } while (src != NULL);
+
     va_end(args);
 }
 
-bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe) {
-    if (ali_da_getlen(exe->srcs) == 0) {
-        ali_log_error("CexeBuilder needs at least one source file");
-        return false;
-    }
+void ali_c_builder_add_libs_(AliCBuilder* builder, ...) {
+    va_list args;
+    va_start(args, builder);
 
-    if (ali_needs_rebuild(exe->target, (const char**)exe->srcs, ali_da_getlen(exe->srcs))) {
-        ali_cmd_append_arg(*cmd, exe->cc);
-        for (ali_usize i = 0; i < ali_da_getlen(exe->cflags); ++i) {
-            ali_cmd_append_arg(*cmd, exe->cflags[i]);
+    char* lib;
+    do {
+        lib = va_arg(args, char*);
+        if (lib != NULL) {
+            ali_da_append(builder->libs, lib);
         }
-        ali_cmd_append_arg(*cmd, "-o");
-        ali_cmd_append_arg(*cmd, exe->target);
-        for (ali_usize i = 0; i < ali_da_getlen(exe->srcs); ++i) {
-            ali_cmd_append_arg(*cmd, exe->srcs[i]);
+    } while (lib != NULL);
+
+    va_end(args);
+}
+
+void ali_c_builder_add_flags_(AliCBuilder* builder, ...) {
+    va_list args;
+    va_start(args, builder);
+
+    char* flag;
+    do {
+        flag = va_arg(args, char*);
+        if (flag != NULL) {
+            ali_da_append(builder->cflags, flag);
         }
-        for (ali_usize i = 0; i < ali_da_getlen(exe->libs); ++i) {
-            ali_cmd_append_arg(*cmd, exe->libs[i]);
+    } while (flag != NULL);
+
+    va_end(args);
+}
+
+void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, char* target, char* src) {
+    ali_da_get_header(builder->srcs)->count = 0;
+    ali_da_get_header(builder->cflags)->count = 0;
+    ali_da_get_header(builder->libs)->count = 0;
+
+#if __GNUC__
+    builder->cc = "gcc";
+#elif defined(__clang__)
+    builder->cc = "clang";
+#else
+#error "Unsupported compiler"
+#endif
+
+    builder->type = type;
+    builder->target = target;
+    ali_da_append(builder->srcs, src);
+}
+
+bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd) {
+    if (ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->srcs))) {
+        ali_cmd_append_args(cmd, builder->cc);
+        if (ali_da_getlen(builder->srcs) == 0) {
+            ali_log_error("No source files");
+            return false;
+        }
+        ali_da_foreach(builder->cflags, char*, flag) {
+            ali_cmd_append_arg(*cmd, *flag);
+        }
+        switch (builder->type) {
+            case C_EXE:
+                break;
+            case C_OBJ:
+                ali_cmd_append_args(cmd, "-c");
+                break;
+            case C_DYNLIB:
+                ali_cmd_append_args(cmd, "-fPIC", "-shared");
+                break;
+            default:
+                ALI_UNREACHABLE();
+        }
+        ali_cmd_append_args(cmd, "-o", builder->target);
+        ali_da_foreach(builder->srcs, char*, src) {
+            ali_cmd_append_arg(*cmd, *src);
+        }
+        ali_da_foreach(builder->libs, char*, lib) {
+            ali_cmd_append_arg(*cmd, *lib);
         }
         return ali_cmd_run_sync_and_reset(*cmd);
     }
-
     return true;
 }
 
-void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
-    exe->target = target;
-
-    ali_da_get_header(exe->srcs)->count = 0;
-    ali_da_get_header(exe->cflags)->count = 0;
-    ali_da_get_header(exe->libs)->count = 0;
-    if (src != NULL) {
-        ali_da_append(exe->srcs, src);
-    }
+bool ali_rename(char*** cmd, const char* from, const char* to) {
+    ali_da_get_header(*cmd)->count = 0;
+    ali_cmd_append_args(cmd, "mv", from, to);
+    return ali_cmd_run_sync_and_reset(*cmd);
 }
 
+bool ali_remove(char*** cmd, const char* path) {
+    ali_da_get_header(*cmd)->count = 0;
+    ali_cmd_append_args(cmd, "rm", path);
+    return ali_cmd_run_sync_and_reset(*cmd);
+}
 
 // @module ali_cmd end
 
@@ -1736,15 +1784,6 @@ void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
 #define needs_rebuild ali_needs_rebuild
 #define needs_rebuild1 ali_needs_rebuild1
 #define rebuild_yourself ali_rebuild_yourself
-
-#define c_exe ali_c_exe
-#define c_exe_add_flag ali_c_exe_add_flag
-#define c_exe_add_flags ali_c_exe_add_flags
-#define c_exe_add_src ali_c_exe_add_src
-#define c_exe_add_library ali_c_exe_add_library
-#define c_exe_add_linker_flag ali_c_exe_add_linker_flag
-#define c_exe_execute ali_c_exe_execute
-#define c_exe_reset ali_c_exe_reset
 
 // @module ali_cmd end
 
