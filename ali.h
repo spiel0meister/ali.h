@@ -396,12 +396,12 @@ typedef struct {
 ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state);
 void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]);
 
+void ali_srand(ali_u64 seed);
+
 ali_u64 ali_rand();
 ali_u64* ali_temp_rand_sequence(ali_usize count);
 ali_f64 ali_rand_float();
 ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
-
-void ali_srand64(ali_u64 seed);
 
 // @module ali_rand end
 
@@ -1287,6 +1287,25 @@ ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 co
 
 // @module ali_rand
 
+AliXoshiro256ppState xoshiro_global_state = { { 0x96EA83C1, 0x218B21E5, 0xAA91FEBD, 0x976414D4 } };
+ali_u64 ali_rand_seed = 0xAABBCCDD;
+
+ali_u64 ali_rand_splitmix64() {
+    ali_u64 z = (ali_rand_seed += 0x9e3779b97f4a7c15);
+    z = (z ^ (z >> 30))*0xbf58476d1ce4e5b9;
+    z = (z ^ (z >> 27))*0x94d049bb133111eb;
+    return z ^ (z >> 31);
+}
+
+void ali_srand(ali_u64 seed) {
+    ali_rand_seed = seed;
+
+    xoshiro_global_state.state[0] = (ali_u64)(ali_rand_splitmix64() & 0xffffffff);
+    xoshiro_global_state.state[1] = (ali_u64)((ali_rand_splitmix64() & 0xffffffff00000000) >> 32);
+    xoshiro_global_state.state[2] = (ali_u64)(ali_rand_splitmix64() & 0xffffffff);
+    xoshiro_global_state.state[3] = (ali_u64)((ali_rand_splitmix64() & 0xffffffff00000000) >> 32);
+}
+
 ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
 	ali_u64 *s = state->state;
 	ali_u64 const result = ali_rotl64(s[1] * 5, 7) * 9;
@@ -1323,22 +1342,8 @@ ali_u64 ali_rand_range(ali_u64 min, ali_u64 max) {
     return ali_rand() % (max - min) + min;
 }
 
-AliXoshiro256ppState xoshiro_global_state = { { 0x96EA83C1, 0x218B21E5, 0xAA91FEBD, 0x976414D4 } };
-
 ali_u64 ali_rand() {
 	return ali_xoshiro256pp_next(&xoshiro_global_state);
-}
-
-#define ali_srand(seed) ali_xoshiro256pp_seed(&xoshiro_global_state, seed)
-
-void ali_srand64(ali_u64 seed) {
-    ali_u64 real_seed[4] = {
-        seed * 2,
-        ali_rotl64(seed, 8),
-        seed & 0xFFFF,
-        seed - 1
-    };
-    ali_srand(real_seed);
 }
 
 // @module ali_rand end
