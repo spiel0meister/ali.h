@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     AliCBuilder builder = {0};
 
-    AliCBuilder* foo_obj = ali_c_builder_next_subbuilder(&builder);
+    AliCBuilder* foo_obj = c_builder_next_subbuilder(&builder);
     c_builder_reset(foo_obj, C_OBJ, &string_arena, "foo.o", "foo.c");
     c_builder_add_flags(foo_obj, "-Wall", "-Wextra", "-ggdb");
 
