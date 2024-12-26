@@ -401,6 +401,8 @@ ali_u64* ali_temp_rand_sequence(ali_usize count);
 ali_f64 ali_rand_float();
 ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 
+void ali_srand64(ali_u64 seed);
+
 // @module ali_rand end
 
 // @module ali_cmd
@@ -463,6 +465,9 @@ CexeBuilder ali_c_exe(char* target, char* src);
 #define ali_c_exe_add_linker_flag(exe, flag) ali_da_append((exe)->cflags, ali_temp_sprintf("-Wl,%s", flag))
 #define ali_c_exe_add_library(exe, library) ali_da_append((exe)->libs, library)
 #define ali_c_exe_add_src(exe, src) ali_da_append((exe)->srcs, src)
+
+void ali_c_exe_add_flags_(CexeBuilder* exe, ...);
+#define ali_c_exe_add_flags(exe, ...) c_exe_add_flags_(exe, __VA_ARGS__, NULL)
 
 bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe);
 void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src);
@@ -1285,7 +1290,7 @@ ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 co
 ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
 	ali_u64 *s = state->state;
 	ali_u64 const result = ali_rotl64(s[1] * 5, 7) * 9;
-	ali_u64 const t = s[1] << 17;
+	ali_u64 const t = s[1] << 9;
 
 	s[2] ^= s[0];
 	s[3] ^= s[1];
@@ -1293,7 +1298,7 @@ ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
 	s[0] ^= s[3];
 
 	s[2] ^= t;
-	s[3] = ali_rotl64(s[3], 45);
+	s[3] = ali_rotl64(s[3], 11);
 
 	return result;
 }
@@ -1325,6 +1330,16 @@ ali_u64 ali_rand() {
 }
 
 #define ali_srand(seed) ali_xoshiro256pp_seed(&xoshiro_global_state, seed)
+
+void ali_srand64(ali_u64 seed) {
+    ali_u64 real_seed[4] = {
+        seed * 2,
+        ali_rotl64(seed, 8),
+        seed & 0xFFFF,
+        seed - 1
+    };
+    ali_srand(real_seed);
+}
 
 // @module ali_rand end
 
@@ -1463,6 +1478,17 @@ CexeBuilder ali_c_exe(char* target, char* src) {
         ali_da_append(exe.srcs, src);
     }
     return exe;
+}
+
+void c_exe_add_flags_(CexeBuilder* exe, ...) {
+    va_list args;
+    va_start(args, exe);
+    while (1) {
+        char* flag = va_arg(args, char*);
+        if (flag == NULL) break;
+        ali_da_append(exe->cflags, flag);
+    }
+    va_end(args);
 }
 
 bool ali_c_exe_execute(char*** cmd, CexeBuilder* exe) {
@@ -1708,6 +1734,7 @@ void ali_c_exe_reset(CexeBuilder* exe, char* target, char* src) {
 
 #define c_exe ali_c_exe
 #define c_exe_add_flag ali_c_exe_add_flag
+#define c_exe_add_flags ali_c_exe_add_flags
 #define c_exe_add_src ali_c_exe_add_src
 #define c_exe_add_library ali_c_exe_add_library
 #define c_exe_add_linker_flag ali_c_exe_add_linker_flag
