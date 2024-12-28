@@ -55,8 +55,13 @@ typedef struct {
 
 AliVector2 ali_vec2_zero(void);
 AliVector2 ali_vec2_from_angle(ali_f32 rads);
+AliVector2 ali_vec2_from_scalar(ali_f32 scalar);
+AliVector2 ali_vec2_normalize(AliVector2 self);
+
 AliVector2 ali_vec2_add(AliVector2 self, AliVector2 that);
 AliVector2 ali_vec2_sub(AliVector2 self, AliVector2 that);
+AliVector2 ali_vec2_mul(AliVector2 self, AliVector2 that);
+AliVector2 ali_vec2_div(AliVector2 self, AliVector2 that);
 AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar);
 
 ali_f32 ali_vec2_dot(AliVector2 self, AliVector2 that);
@@ -108,6 +113,20 @@ AliVector2 ali_vec2_from_angle(ali_f32 rads) {
     return (AliVector2) { ALI_COSF(rads), ALI_SINF(rads) };
 }
 
+AliVector2 ali_vec2_from_scalar(ali_f32 scalar) {
+    return (AliVector2) { scalar, scalar };
+}
+
+AliVector2 ali_vec2_normalize(AliVector2 self) {
+    ali_f32 len = ali_vec2_length(self);
+
+    if (len > 0) {
+        self = ali_vec2_div(self, ali_vec2_from_scalar(len));
+    }
+
+    return self;
+}
+
 AliVector2 ali_vec2_add(AliVector2 self, AliVector2 that) {
 #ifdef __SSE__
     __m128 a = { self.x, self.y };
@@ -136,10 +155,10 @@ AliVector2 ali_vec2_sub(AliVector2 self, AliVector2 that) {
     return self;
 }
 
-AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar) {
+AliVector2 ali_vec2_mul(AliVector2 self, AliVector2 that) {
 #ifdef __SSE__
     __m128 a = { self.x, self.y };
-    __m128 b = { scalar, scalar };
+    __m128 b = { that.x, that.y };
     __m128 c = _mm_mul_ps(a, b);
     self.x = c[0];
     self.y = c[1];
@@ -148,6 +167,24 @@ AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar) {
     self.y *= that.y;
 #endif
     return self;
+}
+
+AliVector2 ali_vec2_div(AliVector2 self, AliVector2 that) {
+#ifdef __SSE__
+    __m128 a = { self.x, self.y };
+    __m128 b = { that.x, that.y };
+    __m128 c = _mm_div_ps(a, b);
+    self.x = c[0];
+    self.y = c[1];
+#else
+    self.x /= that.x;
+    self.y /= that.y;
+#endif
+    return self;
+}
+
+AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar) {
+    return ali_vec2_mul(self, ali_vec2_from_scalar(scalar));
 }
 
 ali_f32 ali_vec2_length_sqr(AliVector2 self) {
@@ -284,8 +321,11 @@ ali_u64 ali_rand() {
 #define VECTOR2_FMT ALI_VECTOR2_FMT
 #define VECTOR2_F ALI_VECTOR2_F
 
-#define vec2_from_angle ali_vec2_from_angle
 #define vec2_zero ali_vec2_zero
+#define vec2_from_angle ali_vec2_from_angle
+#define vec2_from_scalar ali_vec2_from_scalar
+#define vec2_normalize ali_vec2_normalize
+
 #define vec2_add ali_vec2_add
 #define vec2_sub ali_vec2_sub
 #define vec2_scale ali_vec2_scale
