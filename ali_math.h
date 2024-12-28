@@ -1,5 +1,6 @@
 #ifndef ALI_MATH_H_
 #define ALI_MATH_H_
+#include <immintrin.h>
 
 #ifndef ALI_TYPES_
 #define ALI_TYPES_
@@ -25,8 +26,52 @@ typedef ali_u64 ali_usize;
 typedef ali_i64 ali_isize;
 #endif // ALI_TYPES_
 
+#ifndef ALI_SQRTF
+#include <math.h>
+#define ALI_SQRTF sqrtf
+#endif // ALI_SQRTF
+
+#ifndef ALI_SINF
+#include <math.h>
+#define ALI_SINF sinf
+#endif // ALI_SINF
+
+#ifndef ALI_COSF
+#include <math.h>
+#define ALI_COSF cosf
+#endif // ALI_COSF
+
+#ifndef ALI_ATAN2F
+#include <math.h>
+#define ALI_ATAN2F atan2f
+#endif // ALI_ATAN2F
+
+typedef struct {
+    ali_f32 x, y;
+}AliVector2;
+#define ALI_VECTOR2(x, y) ((AliVector2) { x, y })
+#define ALI_VECTOR2_FMT "(%f, %f)"
+#define ALI_VECTOR2_F(v) v.x, v.y
+
+AliVector2 ali_vec2_zero(void);
+AliVector2 ali_vec2_from_angle(ali_f32 rads);
+AliVector2 ali_vec2_add(AliVector2 self, AliVector2 that);
+AliVector2 ali_vec2_sub(AliVector2 self, AliVector2 that);
+AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar);
+
+ali_f32 ali_vec2_dot(AliVector2 self, AliVector2 that);
+ali_f32 ali_vec2_cross(AliVector2 self, AliVector2 that);
+ali_f32 ali_vec2_angle(AliVector2 self, AliVector2 that);
+
+ali_f32 ali_vec2_dist_sqr(AliVector2 self, AliVector2 that);
+ali_f32 ali_vec2_dist(AliVector2 self, AliVector2 that);
+
+ali_f32 ali_vec2_length_sqr(AliVector2 self);
+ali_f32 ali_vec2_length(AliVector2 self);
+
 ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t);
 ali_f32 ali_normalizef(ali_f32 start, ali_f32 end, ali_f32 value);
+ali_f32 ali_remapf(ali_f32 value, ali_f32 in_start, ali_f32 in_end, ali_f32 out_start, ali_f32 out_end);
 ali_u64 ali_rotl64(ali_u64 x, ali_u8 k);
 
 ali_f32 ali_quadbezierf(ali_f32 start, ali_f32 end, ali_f32 control, ali_f32 t);
@@ -55,8 +100,93 @@ ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 
 // @module ali_math
 
+AliVector2 ali_vec2_zero(void) {
+    return (AliVector2) { 0, 0 };
+}
+
+AliVector2 ali_vec2_from_angle(ali_f32 rads) {
+    return (AliVector2) { ALI_COSF(rads), ALI_SINF(rads) };
+}
+
+AliVector2 ali_vec2_add(AliVector2 self, AliVector2 that) {
+#ifdef __SSE__
+    __m128 a = { self.x, self.y };
+    __m128 b = { that.x, that.y };
+    __m128 c = _mm_add_ps(a, b);
+    self.x = c[0];
+    self.y = c[1];
+#else
+    self.x += that.x;
+    self.y += that.y;
+#endif
+    return self;
+}
+
+AliVector2 ali_vec2_sub(AliVector2 self, AliVector2 that) {
+#ifdef __SSE__
+    __m128 a = { self.x, self.y };
+    __m128 b = { that.x, that.y };
+    __m128 c = _mm_sub_ps(a, b);
+    self.x = c[0];
+    self.y = c[1];
+#else
+    self.x -= that.x;
+    self.y -= that.y;
+#endif
+    return self;
+}
+
+AliVector2 ali_vec2_scale(AliVector2 self, ali_f32 scalar) {
+#ifdef __SSE__
+    __m128 a = { self.x, self.y };
+    __m128 b = { scalar, scalar };
+    __m128 c = _mm_mul_ps(a, b);
+    self.x = c[0];
+    self.y = c[1];
+#else
+    self.x *= that.x;
+    self.y *= that.y;
+#endif
+    return self;
+}
+
+ali_f32 ali_vec2_length_sqr(AliVector2 self) {
+    return self.x * self.x + self.y * self.y;
+}
+
+ali_f32 ali_vec2_dot(AliVector2 self, AliVector2 that) {
+    return (self.x * that.x + self.y * that.y);
+}
+
+ali_f32 ali_vec2_cross(AliVector2 self, AliVector2 that) {
+    return (self.x * that.y - self.y * that.x);
+}
+
+ali_f32 ali_vec2_angle(AliVector2 self, AliVector2 that) {
+    return ALI_ATAN2F(ali_vec2_cross(self, that), ali_vec2_dot(self, that));
+}
+
+ali_f32 ali_vec2_dist_sqr(AliVector2 self, AliVector2 that) {
+    ali_f32 dx = self.x - that.x;
+    ali_f32 dy = self.y - that.y;
+    return dx * dx + dy * dy;
+}
+
+ali_f32 ali_vec2_dist(AliVector2 self, AliVector2 that) {
+    return ALI_SQRTF(ali_vec2_dist_sqr(self, that));
+}
+
+
+ali_f32 ali_vec2_length(AliVector2 self) {
+    return ALI_SQRTF(ali_vec2_length_sqr(self));
+}
+
 ali_f32 ali_lerpf(ali_f32 a, ali_f32 b, ali_f32 t) {
 	return a + (b - a) * t;
+}
+
+ali_f32 ali_remapf(ali_f32 value, ali_f32 in_start, ali_f32 in_end, ali_f32 out_start, ali_f32 out_end) {
+    return (value - in_start)/(in_end - in_start) * (out_end - out_start) + out_start;
 }
 
 ali_f32 ali_normalizef(ali_f32 start, ali_f32 end, ali_f32 value) {
@@ -67,6 +197,7 @@ ali_u64 ali_rotl64(ali_u64 x, ali_u8 k) {
 	return (x << k) | (x >> (64 - k));
 
 }
+
 ali_f32 ali_quadbezierf(ali_f32 start, ali_f32 end, ali_f32 control, ali_f32 t) {
 	ali_f32 a = ali_lerpf(start, control, t);
 	ali_f32 b = ali_lerpf(control, end, t);
@@ -146,3 +277,33 @@ ali_u64 ali_rand() {
 // @module ali_rand end
 
 #endif // ALI_MATH_IMPLEMENTATION
+
+#ifdef ALI_MATH_REMOVE_PREFIX
+#undef ALI_MATH_REMOVE_PREFIX
+
+#define VECTOR2_FMT ALI_VECTOR2_FMT
+#define VECTOR2_F ALI_VECTOR2_F
+
+#define vec2_from_angle ali_vec2_from_angle
+#define vec2_zero ali_vec2_zero
+#define vec2_add ali_vec2_add
+#define vec2_sub ali_vec2_sub
+#define vec2_scale ali_vec2_scale
+
+#define vec2_dot ali_vec2_dot
+#define vec2_cross ali_vec2_cross
+#define vec2_angle ali_vec2_angle
+
+#define vec2_dist_sqr ali_vec2_dist_sqr
+#define vec2_dist ali_vec2_dist
+
+#define vec2_length ali_vec2_length
+#define vec2_length_sqr ali_vec2_length_sqr
+
+// TODO: should we do this?
+// #define lerpf ali_lerpf
+// #define normalizef ali_normalizef
+// #define rotl64 ali_rotl64
+// #define quadbezierf ali_quadbezierf
+// #define cubebezierf ali_cubebezierf
+#endif // ALI_MATH_REMOVE_PREFIX
