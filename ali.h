@@ -408,6 +408,8 @@ bool ali_needs_rebuild1(const char* output, const char* input);
 bool ali_rename(char*** cmd, const char* from, const char* to);
 bool ali_remove(char*** cmd, const char* path);
 
+bool ali_create_dir_if_not_exists(const char* path);
+
 #define ali_rebuild_yourself(cmd, argc, argv) do { \
     const char* src = __FILE__; \
     const char* dst = argv[0]; \
@@ -455,7 +457,7 @@ void ali_c_builder_add_libs_(AliCBuilder* builder, ...);
 void ali_c_builder_add_flags_(AliCBuilder* builder, ...);
 #define ali_c_builder_add_flags(...) ali_c_builder_add_flags_(__VA_ARGS__, NULL)
 void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliArena* arena, char* target, char* src);
-bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd);
+bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force);
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder);
 
 // @module ali_cmd end
@@ -1434,9 +1436,9 @@ void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliArena* a
     ali_arena_da_append(builder->arena, builder->srcs, src);
 }
 
-bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd) {
+bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
     ali_da_foreach(builder->arena, builder->subbuilders, AliCBuilder, subbuilder) {
-        if (!ali_c_builder_execute(subbuilder, cmd)) return false;
+        if (!ali_c_builder_execute(subbuilder, cmd, force)) return false;
         switch (subbuilder->type) {
             case C_EXE:
                 break;
@@ -1451,7 +1453,9 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd) {
         }
     }
 
-    if (ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->arena, builder->srcs))) {
+    if (force || ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->arena, builder->srcs))) {
+        ali_log_info("Building %s", builder->target);
+
         ali_cmd_append_args(cmd, builder->cc);
         if (ali_da_getlen(builder->arena, builder->srcs) == 0) {
             ali_log_error("No source files");
@@ -1479,9 +1483,17 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd) {
         ali_da_foreach(builder->arena, builder->libs, char*, lib) {
             ali_cmd_append_arg(*cmd, *lib);
         }
-        return ali_cmd_run_sync_and_reset(*cmd);
+        bool ret = ali_cmd_run_sync_and_reset(*cmd);
+        if (ret) {
+            ali_log_info("Built %s", builder->target);
+        } else {
+            ali_log_error("Failed to built %s", builder->target);
+        }
+        return ret;
+    } else {
+        ali_log_warn("No need to build %s", builder->target);
+        return true;
     }
-    return true;
 }
 
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
@@ -1501,6 +1513,17 @@ bool ali_remove(char*** cmd, const char* path) {
     ali_da_get_header(NULL, *cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
+}
+
+bool ali_create_dir_if_not_exists(const char* path) {
+    if (mkdir(path, 0766) < 0) {
+        if (errno != EEXIST) {
+            ali_log_error("Couldn't create %s: %s\n", path, strerror(errno));
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // @module ali_cmd end
@@ -1705,6 +1728,7 @@ bool ali_remove(char*** cmd, const char* path) {
 
 #define needs_rebuild ali_needs_rebuild
 #define needs_rebuild1 ali_needs_rebuild1
+#define create_dir_if_not_exists ali_create_dir_if_not_exists
 #define rebuild_yourself ali_rebuild_yourself
 
 #define c_builder_add_srcs ali_c_builder_add_srcs
