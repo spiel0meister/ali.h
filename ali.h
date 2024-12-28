@@ -242,7 +242,6 @@ typedef struct {
 
 AliDaHeader* ali_da_new_header_with_size(AliArena* arena, size_t init_capacity, size_t item_size);
 AliDaHeader* ali_da_get_header_with_size(AliArena* arena, void* da, size_t item_size);
-void* ali_da_maybe_resize_with_size(void* da, size_t to_add, size_t item_size);
 void* ali_da_free_with_size(void* da, size_t item_size);
 void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize to_add, ali_usize item_size);
 
@@ -250,7 +249,6 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 #define ali_da_get_header(arena, da) ali_da_get_header_with_size(arena, da, sizeof(*(da)))
 #define ali_da_getlen(arena, da) ((da) == NULL ? 0 : ali_da_get_header(arena, da)->count)
 
-#define ali_da_maybe_resize(da, to_add) ((da) = ali_da_maybe_resize_with_size(da, to_add, sizeof(*(da))))
 #define ali_arena_da_maybe_resize(arena, da, to_add) ((da) = ali_arena_da_maybe_resize_with_size(arena, da, to_add, sizeof(*(da))))
 
 #define ali_da_reset(arena, da) if ((da) != NULL) { ali_da_get_header(arena, da)->count = 0; }
@@ -320,7 +318,7 @@ ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, size_t len)
 // @module ali_sv
 typedef struct {
 	char* start;
-	size_t len;
+	ali_usize len;
 }AliSv;
 
 #define ALI_SV_FMT "%.*s"
@@ -713,6 +711,7 @@ void* ali_arena_alloc(AliArena* self, size_t size) {
 void* ali_arena_realloc(AliArena* arena, void* data, ali_usize oldsize, ali_usize newsize) {
     void* copy = ali_arena_alloc(arena, newsize);
     ALI_MEMCPY(copy, data, oldsize);
+    if (arena == NULL) ALI_FREE(data);
     return copy;
 }
 
@@ -787,21 +786,6 @@ AliDaHeader* ali_da_get_header_with_size(AliArena* arena, void* da, size_t item_
 	if (da == NULL) return ali_da_new_header_with_size(arena, ALI_DA_DEFAULT_INIT_CAPACITY, item_size);
 	
 	return (AliDaHeader*)da - 1;
-}
-
-void* ali_da_maybe_resize_with_size(void* da, size_t to_add, size_t item_size) {
-	AliDaHeader* h = ali_da_get_header_with_size(NULL, da, item_size);
-	
-	if (h->count + to_add >= h->capacity) {
-		while (h->count + to_add >= h->capacity) {
-			if (h->capacity == 0) h->capacity = ALI_DA_DEFAULT_INIT_CAPACITY;
-			else h->capacity *= 2;
-		}
-
-		h = ALI_REALLOC(h, sizeof(*h) + h->capacity * item_size);
-	}
-
-	return h->data;
 }
 
 void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize to_add, ali_usize item_size) {
@@ -1578,7 +1562,7 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd) {
                 ali_c_builder_add_srcs(builder, subbuilder->target);
                 break;
             case C_DYNLIB:
-                ali_c_builder_add_libs(builder, subbuilder->target);
+                ali_c_builder_add_libs(builder, ali_temp_sprintf("-l:%s", subbuilder->target));
                 break;
             default:
                 ALI_UNREACHABLE();
