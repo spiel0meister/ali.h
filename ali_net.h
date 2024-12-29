@@ -123,7 +123,7 @@ ali_i32 ali_tcp_client_connect(const char* host, ali_u16 port) {
     bool result = true;
     ali_i32 sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        log_error("Couldn't create socket: %s", strerror(errno));
+        ali_log_error("Couldn't create socket: %s", strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
@@ -133,7 +133,7 @@ ali_i32 ali_tcp_client_connect(const char* host, ali_u16 port) {
     inet_aton(host, &addr.sin_addr);
 
     if (connect(sockfd, (void*)&addr, sizeof(addr)) < 0) {
-        log_error("Couldn't connect on %s:%d: %s", host, port, strerror(errno));
+        ali_log_error("Couldn't connect on %s:%d: %s", host, port, strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 

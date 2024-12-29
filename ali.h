@@ -187,6 +187,7 @@ ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_);
 bool* ali_flag_option(const char* name, const char* desc, bool default_);
 
 void ali_flag_print_help(FILE* sink);
+ali_isize ali_flag_parse_with_program(int argc, char** argv);
 ali_isize ali_flag_parse(int argc, char** argv);
 
 // @module ali_flag end
@@ -602,10 +603,13 @@ void ali_flag_print_help(FILE* sink) {
     }
 }
 
-ali_isize ali_flag_parse(int argc, char** argv) {
+ali_isize ali_flag_parse_with_program(int argc, char** argv) {
     char* program = ali_shift_args(&argc, &argv);
     ALI_UNUSED(program);
+    return ali_flag_parse(argc, argv);
+}
 
+ali_isize ali_flag_parse(int argc, char** argv) {
 while_loop: while (argc > 0) {
         char* arg = ali_shift_args(&argc, &argv);
 
@@ -1565,6 +1569,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
 #define SWAP ALI_SWAP
 
 #define path_name ali_path_name
+#define shift_args ali_shift_args
 // @module ali_util end
 
 // @module ali_types
@@ -1612,6 +1617,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
 
 #define flag_print_help ali_flag_print_help
 #define flag_parse ali_flag_parse
+#define flag_parse_with_program ali_flag_parse
 
 // @module ali_flag end
 
