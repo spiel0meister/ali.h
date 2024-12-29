@@ -3,3 +3,5 @@ main
 ali_build
 ali_build.prev
 foo.o
+client
+server
