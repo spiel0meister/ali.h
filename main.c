@@ -9,9 +9,11 @@
 #define ALI_MATH_REMOVE_PREFIX
 #include "ali_math.h"
 
-#include "foo.h"
+#define ALI_NET_IMPLEMENTATION
+#define ALI_NET_REMOVE_PREFIX
+#include "ali_net.h"
 
 int main(void) {
-	return 0;
+    return 0;
 }
 

@@ -43,7 +43,6 @@
 
 #ifndef ALI_H_
 #define ALI_H_
-#include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -95,7 +94,7 @@
 		*(b) = (__tmp); \
 	} while (0)
 
-#define ALI_RETURN_DEFER(value) do { result = value; goto defer } while (0)
+#define ALI_RETURN_DEFER(value) do { result = value; goto defer; } while (0)
 
 #define ALI_FORMAT_ATTRIBUTE(str, vstart) __attribute__((__format__(printf, str, vstart)))
 
@@ -108,6 +107,7 @@ char* ali_shift_args(int* argc, char*** argv);
 // @module ali_types
 #ifndef ALI_TYPES_
 #define ALI_TYPES_
+#include <stdint.h>
 typedef uint8_t  ali_u8;
 typedef uint16_t ali_u16;
 typedef uint32_t ali_u32;
@@ -582,7 +582,23 @@ void ali_flag_print_help(FILE* sink) {
     for (ali_usize i = 0; i < ali_flag_list_size; ++i) {
         AliFlag* flag = &ali_flag_list[i];
         fprintf(sink, "%s:\n", flag->name);
-        fprintf(sink, "    %s\n", flag->description);
+        fprintf(sink, "    %s", flag->description);
+        switch (flag->type) {
+            case FLAG_STRING:
+                if (flag->as.string != NULL) {
+                    fprintf(sink, " (default: %s)\n", flag->as.string);
+                }
+                break;
+            case FLAG_U64:
+                fprintf(sink, " (default: %lu)\n", flag->as.num_u64);
+                break;
+            case FLAG_F64:
+                fprintf(sink, " (default: %lf)\n", flag->as.num_f64);
+                break;
+            case FLAG_OPTION:
+                fprintf(sink, " (default: %s)\n", flag->as.option ? "true" : "false");
+                break;
+        }
     }
 }
 
@@ -1552,6 +1568,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
 // @module ali_util end
 
 // @module ali_types
+#ifdef ALI_TYPES_
 #define u8 ali_u8
 #define u16 ali_u16
 #define u32 ali_u32
@@ -1570,6 +1587,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
 
 #define usize ali_usize
 #define isize ali_isize
+#endif // ALI_TYPES_
 // @module ali_types end
 
 // @module ali_log

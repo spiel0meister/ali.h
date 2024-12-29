@@ -14,13 +14,17 @@ int main(int argc, char** argv) {
 
     AliCBuilder builder = {0};
 
-    AliCBuilder* foo_obj = c_builder_next_subbuilder(&builder);
-    c_builder_reset(foo_obj, C_OBJ, &string_arena, "foo.o", "foo.c");
-    c_builder_add_flags(foo_obj, "-Wall", "-Wextra", "-ggdb");
-
     c_builder_reset(&builder, C_EXE, &string_arena, "main", "main.c");
     c_builder_add_flags(&builder, "-Wall", "-Wextra", "-ggdb");
     c_builder_add_libs(&builder, "-lm");
+    if (!c_builder_execute(&builder, &cmd, *force)) return 1;
+
+    c_builder_reset(&builder, C_EXE, &string_arena, "server", "server.c");
+    c_builder_add_flags(&builder, "-Wall", "-Wextra", "-ggdb");
+    if (!c_builder_execute(&builder, &cmd, *force)) return 1;
+
+    c_builder_reset(&builder, C_EXE, &string_arena, "client", "client.c");
+    c_builder_add_flags(&builder, "-Wall", "-Wextra", "-ggdb");
     if (!c_builder_execute(&builder, &cmd, *force)) return 1;
 
     da_free(cmd);
