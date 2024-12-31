@@ -844,7 +844,7 @@ void* ali_da_free_with_size(void* da, ali_usize item_size) {
 
 AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size) {
     AliSlice slice = {
-        .count = da_getlen(da),
+        .count = ali_da_getlen(da),
         .item_size = item_size,
         .data = da,
     };
@@ -852,10 +852,8 @@ AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size) {
 }
 
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size) {
-    ALI_ASSERT(start >= 0);
-    ALI_ASSERT(start < da_getlen(da));
-    ALI_ASSERT(end_exclusive >= 0);
-    ALI_ASSERT(end_exclusive <= da_getlen(da));
+    ALI_ASSERT(start < ali_da_getlen(da));
+    ALI_ASSERT(end_exclusive <= ali_da_getlen(da));
 
     AliSlice slice = {
         .count = end_exclusive - start,
@@ -864,12 +862,9 @@ AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusi
     };
     return slice;
 }
-#define da_slice ali_da_slice
 
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive) {
-    ALI_ASSERT(start >= 0);
     ALI_ASSERT(start < slice.count);
-    ALI_ASSERT(end_exclusive >= 0);
     ALI_ASSERT(end_exclusive <= slice.count);
 
     AliSlice slice_ = {
