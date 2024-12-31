@@ -294,6 +294,9 @@ AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusi
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive);
 void* ali_slice_get(AliSlice slice, ali_usize i);
 
+#define ali_slice_for(slice, i) for (ali_usize i = 0; i < slice.count; ++i)
+#define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = slice.data; ptr < slice.data + (slice.count * slice.item_size); ++ptr)
+
 // @module ali_slice end
 
 // @module ali_temp_alloc
@@ -1771,6 +1774,9 @@ typedef ali_isize isize;
 #define da_slice ali_da_slice
 #define slice_slice ali_slice_slice
 #define slice_get ali_slice_get
+
+#define slice_for ali_slice_for
+#define slice_foreach ali_slice_foreach
 
 // @module ali_slice end
 
