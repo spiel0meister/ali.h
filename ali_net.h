@@ -156,24 +156,24 @@ defer:
 #ifdef ALI_TYPES_
 #ifndef ALI_TYPES_ALIASES_
 #define ALI_TYPES_ALIASES_
-#define u8 ali_u8
-#define u16 ali_u16
-#define u32 ali_u32
-#define u64 ali_u64
+typedef ali_u8 u8;
+typedef ali_u16 u16;
+typedef ali_u32 u32;
+typedef ali_u64 u64;
 
-#define i8 ali_i8
-#define i16 ali_i16
-#define i32 ali_i32
-#define i64 ali_i64
+typedef ali_i8 i8;
+typedef ali_i16 i16;
+typedef ali_i32 i32;
+typedef ali_i64 i64;
 
-#define f32 ali_f32
+typedef ali_f32 f32;
 
 #ifdef __x86_64__
-#define f64 ali_f64
+typedef ali_f64 f64;
 #endif // __x86_64__
 
-#define usize ali_usize
-#define isize ali_isize
+typedef ali_usize usize;
+typedef ali_isize isize;
 #endif // ALI_TYPES_ALIASES_
 #endif // ALI_TYPES_
 
