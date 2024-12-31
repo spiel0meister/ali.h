@@ -318,6 +318,27 @@ ali_u64 ali_rand() {
 #ifdef ALI_MATH_REMOVE_PREFIX
 #undef ALI_MATH_REMOVE_PREFIX
 
+#ifndef ALI_TYPES_
+typedef ali_u8 u8;
+typedef ali_u16 u16;
+typedef ali_u32 u32;
+typedef ali_u64 u64;
+
+typedef ali_i8 i8;
+typedef ali_i16 i16;
+typedef ali_i32 i32;
+typedef ali_i64 i64;
+
+typedef ali_f32 f32;
+
+#ifdef __x86_64__
+typedef ali_f64 f64;
+#endif // __x86_64__
+
+typedef ali_usize usize;
+typedef ali_isize isize;
+#endif // ALI_TYPES_
+
 #define VECTOR2_FMT ALI_VECTOR2_FMT
 #define VECTOR2_F ALI_VECTOR2_F
 
