@@ -215,9 +215,10 @@ typedef struct {
 }AliArenaMark;
 
 AliRegion* ali_region_new(size_t capacity);
-void* ali_region_alloc(AliRegion* self, size_t size);
+void* ali_region_alloc(AliRegion* self, size_t size, size_t alignment);
 
-void* ali_arena_alloc(AliArena* self, size_t size);
+void* ali_arena_alloc_ex(AliArena* self, size_t size, size_t alignment);
+#define ali_arena_alloc(self, size) ali_arena_alloc_ex(self, size, 8)
 void* ali_arena_realloc(AliArena* arena, void* data, ali_usize oldsize, ali_usize newsize);
 void* ali_arena_memdup(AliArena* self, const void* mem, size_t size_bytes);
 char* ali_arena_strdup(AliArena* self, const char* cstr);
@@ -683,14 +684,15 @@ AliRegion* ali_region_new(size_t capacity) {
 	return new;
 }
 
-void* ali_region_alloc(AliRegion* self, size_t size) {
+void* ali_region_alloc(AliRegion* self, size_t size, size_t alignment) {
 	if (self->count + size >= self->capacity) return NULL;
 	void* ptr = self->data + self->count;
 	self->count += size;
+	self->count += self->count % alignment;
 	return ptr;
 }
 
-void* ali_arena_alloc(AliArena* self, size_t size) {
+void* ali_arena_alloc_ex(AliArena* self, size_t size, size_t alignment) {
     if (self == NULL) return ALI_MALLOC(size);
 
 	if (self->start == NULL) {
@@ -701,7 +703,7 @@ void* ali_arena_alloc(AliArena* self, size_t size) {
 	AliRegion* region = self->end;
 	void* ptr;
 	do {
-		ptr = ali_region_alloc(region, size);
+		ptr = ali_region_alloc(region, size, alignment);
 		if (ptr == NULL) {
 			if (region->next == NULL) {
 				region->next = ali_region_new(ALI_REGION_DEFAULT_CAP);
