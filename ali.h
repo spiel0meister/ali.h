@@ -1622,7 +1622,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
 // @module ali_util end
 
 // @module ali_types
-#ifndef ALI_TYPES_
+#ifdef ALI_TYPES_
 typedef ali_u8 u8;
 typedef ali_u16 u16;
 typedef ali_u32 u32;
