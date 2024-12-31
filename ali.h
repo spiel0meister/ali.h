@@ -152,9 +152,9 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
 
 #else // ALI_LOG_END
-#define ali_log_info printf
-#define ali_log_warn printf
-#define ali_log_error(...) fprintf(stderr, __VA_ARGS__)
+#define ali_log_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#define ali_log_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#define ali_log_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
 #endif // ALI_NO_LOG
 // @module ali_log end
 
@@ -1573,25 +1573,25 @@ bool ali_create_dir_if_not_exists(const char* path) {
 // @module ali_util end
 
 // @module ali_types
-#ifdef ALI_TYPES_
-#define u8 ali_u8
-#define u16 ali_u16
-#define u32 ali_u32
-#define u64 ali_u64
+#ifndef ALI_TYPES_
+typedef ali_u8 u8;
+typedef ali_u16 u16;
+typedef ali_u32 u32;
+typedef ali_u64 u64;
 
-#define i8 ali_i8
-#define i16 ali_i16
-#define i32 ali_i32
-#define i64 ali_i64
+typedef ali_i8 i8;
+typedef ali_i16 i16;
+typedef ali_i32 i32;
+typedef ali_i64 i64;
 
-#define f32 ali_f32
+typedef ali_f32 f32;
 
 #ifdef __x86_64__
-#define f64 ali_f64
+typedef ali_f64 f64;
 #endif // __x86_64__
 
-#define usize ali_usize
-#define isize ali_isize
+typedef ali_usize usize;
+typedef ali_isize isize;
 #endif // ALI_TYPES_
 // @module ali_types end
 
