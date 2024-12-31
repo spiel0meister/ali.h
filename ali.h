@@ -7,6 +7,7 @@
         - cli flags parsing (ali_flag)
 		- arena (ali_arena)
 		- dynamic array (ali_da)
+		- slices (ali_slice)
 		- temp allocator (ali_temp_alloc)
 		- utf8 (ali_utf8)
 		- string view (ali_sv)
@@ -250,7 +251,7 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 
 #define ali_da_new_header(arena, init_capacity) ali_da_new_header_with_size(arena, init_capacity, sizeof(*(da)))
 #define ali_da_get_header(arena, da) ali_da_get_header_with_size(arena, da, sizeof(*(da)))
-#define ali_da_getlen(arena, da) ((da) == NULL ? 0 : ali_da_get_header(arena, da)->count)
+#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(NULL, da)->count)
 
 #define ali_arena_da_maybe_resize(arena, da, to_add) ((da) = ali_arena_da_maybe_resize_with_size(arena, da, to_add, sizeof(*(da))))
 
@@ -272,10 +273,28 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 #define ali_da_remove_unordered(arena, da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(arena, da)->count])
 #define ali_da_remove_ordered(arena, da, i) (ALI_ASSERT(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(arena, da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
 
-#define ali_da_for(arena, da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(arena, da); ++iter_name)
-#define ali_da_foreach(arena, da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(arena, da); ++iter_name)
+#define ali_da_for(da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
+#define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
 
 // @module ali_da end
+
+// @module ali_slice
+
+typedef struct {
+    ali_usize count;
+
+    ali_usize item_size;
+    ali_u8* data;
+}AliSlice;
+
+AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size);
+#define ali_da_to_slice(da) ali_da_to_slice_with_size(da, sizeof(*(da)))
+AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size);
+#define ali_da_slice(da, start, end_exclusive) ali_da_slice_with_size(da, start, end_exclusive, sizeof(*(da)))
+AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive);
+void* ali_slice_get(AliSlice slice, ali_usize i);
+
+// @module ali_slice end
 
 // @module ali_temp_alloc
 #ifndef ALI_TEMP_BUF_SIZE
@@ -818,6 +837,52 @@ void* ali_da_free_with_size(void* da, ali_usize item_size) {
 
 // @module ali_da end
 
+// @module ali_slice
+
+AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size) {
+    AliSlice slice = {
+        .count = da_getlen(da),
+        .item_size = item_size,
+        .data = da,
+    };
+    return slice;
+}
+
+AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size) {
+    ALI_ASSERT(start >= 0);
+    ALI_ASSERT(start < da_getlen(da));
+    ALI_ASSERT(end_exclusive >= 0);
+    ALI_ASSERT(end_exclusive <= da_getlen(da));
+
+    AliSlice slice = {
+        .count = end_exclusive - start,
+        .item_size = item_size,
+        .data = (ali_u8*)(da) + start * item_size
+    };
+    return slice;
+}
+#define da_slice ali_da_slice
+
+AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive) {
+    ALI_ASSERT(start >= 0);
+    ALI_ASSERT(start < slice.count);
+    ALI_ASSERT(end_exclusive >= 0);
+    ALI_ASSERT(end_exclusive <= slice.count);
+
+    AliSlice slice_ = {
+        .count = end_exclusive - start,
+        .item_size = slice.item_size,
+        .data = slice.data + start * slice.item_size,
+    };
+    return slice_;
+}
+
+void* ali_slice_get(AliSlice slice, ali_usize i) {
+    return slice.data + i * slice.item_size; 
+}
+
+// @module ali_slice end
+
 // @module ali_temp_alloc
 
 static ali_u8 ali_temp_buffer[ALI_TEMP_BUF_SIZE] = {0};
@@ -1302,7 +1367,7 @@ void ali_cmd_append_args_(char*** cmd, ...) {
 char* ali_cmd_render(char** cmd) {
     char* render = ali_temp_get_cur();
 
-    for (ali_usize i = 0; i < ali_da_getlen(NULL, cmd); ++i) {
+    for (ali_usize i = 0; i < ali_da_getlen(cmd); ++i) {
         char* arg = cmd[i];
         if (arg == NULL) break;
         if (i > 0) ali_temp_push(' ');
@@ -1500,7 +1565,7 @@ void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliArena* a
 }
 
 bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
-    ali_da_foreach(builder->arena, builder->subbuilders, AliCBuilder, subbuilder) {
+    ali_da_foreach(builder->subbuilders, AliCBuilder, subbuilder) {
         if (!ali_c_builder_execute(subbuilder, cmd, force)) return false;
         switch (subbuilder->type) {
             case C_EXE:
@@ -1516,15 +1581,15 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
         }
     }
 
-    if (force || ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->arena, builder->srcs))) {
+    if (force || ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->srcs))) {
         ali_log_info("Building %s", builder->target);
 
         ali_cmd_append_args(cmd, builder->cc);
-        if (ali_da_getlen(builder->arena, builder->srcs) == 0) {
+        if (ali_da_getlen(builder->srcs) == 0) {
             ali_log_error("No source files");
             return false;
         }
-        ali_da_foreach(builder->arena, builder->cflags, char*, flag) {
+        ali_da_foreach(builder->cflags, char*, flag) {
             ali_cmd_append_arg(*cmd, *flag);
         }
         switch (builder->type) {
@@ -1540,10 +1605,10 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
                 ALI_UNREACHABLE();
         }
         ali_cmd_append_args(cmd, "-o", builder->target);
-        ali_da_foreach(builder->arena, builder->srcs, char*, src) {
+        ali_da_foreach(builder->srcs, char*, src) {
             ali_cmd_append_arg(*cmd, *src);
         }
-        ali_da_foreach(builder->arena, builder->libs, char*, lib) {
+        ali_da_foreach(builder->libs, char*, lib) {
             ali_cmd_append_arg(*cmd, *lib);
         }
         bool ret = ali_cmd_run_sync_and_reset(*cmd);
@@ -1699,6 +1764,15 @@ typedef ali_isize isize;
 #define da_for ali_da_for
 #define da_foreach ali_da_foreach
 // @module ali_da end
+
+// @module ali_slice
+
+#define da_to_slice ali_da_to_slice
+#define da_slice ali_da_slice
+#define slice_slice ali_slice_slice
+#define slice_get ali_slice_get
+
+// @module ali_slice end
 
 // @module ali_temp_alloc
 
