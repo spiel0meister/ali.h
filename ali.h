@@ -686,9 +686,9 @@ AliRegion* ali_region_new(size_t capacity) {
 
 void* ali_region_alloc(AliRegion* self, size_t size, size_t alignment) {
 	if (self->count + size >= self->capacity) return NULL;
+	self->count += self->count % alignment;
 	void* ptr = self->data + self->count;
 	self->count += size;
-	self->count += self->count % alignment;
 	return ptr;
 }
 
@@ -1716,6 +1716,7 @@ typedef ali_isize isize;
 #define region_new ali_region_new
 #define region_alloc ali_region_alloc
 
+#define arena_alloc_ex ali_arena_alloc_ex
 #define arena_alloc ali_arena_alloc
 #define arena_memdup ali_arena_memdup
 #define arena_strdup ali_arena_strdup
