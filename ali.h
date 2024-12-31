@@ -391,6 +391,15 @@ void ali_print_measurements(void);
 #include <sys/wait.h>
 #include <sys/stat.h>
 
+typedef struct {
+    ali_u8 redirect_bitmask;
+    int in_pipe[2];
+    int out_pipe[2];
+}AliCmdRedirect;
+#define ALI_REDIRECT_STDIN (1 << 0)
+#define ALI_REDIRECT_STDOUT (1 << 1)
+#define ALI_REDIRECT_STDERR (1 << 2)
+
 #define ali_cmd_append_arg ali_da_append
 #define ali_cmd_shallow_append_arg ali_da_shallow_append
 
@@ -398,7 +407,8 @@ void ali_cmd_append_args_(char*** cmd, ...);
 #define ali_cmd_append_args(...) ali_cmd_append_args_(__VA_ARGS__, NULL)
 
 char* ali_cmd_render(char** cmd);
-pid_t ali_cmd_run_async(char** cmd);
+pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect);
+#define ali_cmd_run_async(cmd) ali_cmd_run_async_redirect(cmd, NULL)
 bool ali_wait_for_process(pid_t pid);
 bool ali_cmd_run_sync(char** cmd);
 bool ali_cmd_run_sync_and_reset(char** cmd);
@@ -406,6 +416,7 @@ bool ali_cmd_run_sync_and_reset(char** cmd);
 bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count);
 bool ali_needs_rebuild1(const char* output, const char* input);
 
+bool ali_dup2_logged(int fd1, int fd2);
 bool ali_rename(char*** cmd, const char* from, const char* to);
 bool ali_remove(char*** cmd, const char* path);
 
@@ -1306,23 +1317,53 @@ char* ali_cmd_render(char** cmd) {
     return render;
 }
 
-pid_t ali_cmd_run_async(char** cmd) {
+pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
     ali_usize stamp = ali_temp_stamp();
     char* render = ali_cmd_render(cmd);
     ali_log_info("[CMD] %s", render);
     ali_temp_rewind(stamp);
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        ali_cmd_shallow_append_arg(cmd, NULL);
-        execvp(cmd[0], cmd);
+    bool should_redirect_stdin = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDIN) != 0;
+    bool should_redirect_stdout = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDOUT) != 0;
+    bool should_redirect_stderr = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDERR) != 0;
 
-        ali_log_error("Couldn't start process: %s", strerror(errno));
-        exit(1);
-    } else if (pid < 0) {
-        ali_log_error("Couldn't fork: %s", strerror(errno));
+    if (should_redirect_stdout || should_redirect_stderr) {
+        if (pipe(redirect->out_pipe) < 0) {
+            ali_log_error("Couldn't create pipe: %s\n", strerror(errno));
+            return -1;
+        }
     }
 
+    if (should_redirect_stdin) {
+        if (pipe(redirect->in_pipe) < 0) {
+            ali_log_error("Couldn't create pipe: %s\n", strerror(errno));
+            return -1;
+        }
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        ali_log_error("Couldn't fork: %s\n", strerror(errno));
+        return -1;
+    } else if (pid == 0) {
+        if (should_redirect_stdin) {
+            if (!ali_dup2_logged(redirect->in_pipe[0], 0)) exit(1);
+        }
+
+        if (should_redirect_stdout) {
+            if (!ali_dup2_logged(redirect->out_pipe[1], 1)) exit(1);
+        }
+
+        if (should_redirect_stderr) {
+            if (!ali_dup2_logged(redirect->out_pipe[1], 2)) exit(1);
+        }
+
+        execvp(cmd[0], cmd);
+
+        ali_log_error("Couldn't start process: %s\n", strerror(errno));
+        exit(1);
+    }
+    
     return pid;
 }
 
@@ -1533,6 +1574,14 @@ bool ali_remove(char*** cmd, const char* path) {
     ali_da_get_header(NULL, *cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
+}
+
+bool ali_dup2_logged(int fd1, int fd2) {
+    if (dup2(fd1, fd2) < 0) {
+        ali_log_error("Couldn't dup2: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
 }
 
 bool ali_create_dir_if_not_exists(const char* path) {
@@ -1746,6 +1795,7 @@ typedef ali_isize isize;
 #define cmd_append_args ali_cmd_append_args
 #define wait_for_process ali_wait_for_process
 #define cmd_render ali_cmd_render
+#define cmd_run_async_redirect ali_cmd_run_async_redirect
 #define cmd_run_async ali_cmd_run_async
 #define cmd_run_sync ali_cmd_run_sync
 #define cmd_run_sync_and_reset ali_cmd_run_sync_and_reset
