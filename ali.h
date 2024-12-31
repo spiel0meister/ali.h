@@ -1623,6 +1623,8 @@ bool ali_create_dir_if_not_exists(const char* path) {
 
 // @module ali_types
 #ifdef ALI_TYPES_
+#ifndef ALI_TYPES_ALIASES_
+#define ALI_TYPES_ALIASES_
 typedef ali_u8 u8;
 typedef ali_u16 u16;
 typedef ali_u32 u32;
@@ -1641,6 +1643,7 @@ typedef ali_f64 f64;
 
 typedef ali_usize usize;
 typedef ali_isize isize;
+#endif // ALI_TYPES_ALIASES_
 #endif // ALI_TYPES_
 // @module ali_types end
 

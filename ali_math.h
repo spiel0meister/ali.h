@@ -46,6 +46,10 @@ typedef ali_i64 ali_isize;
 #define ALI_ATAN2F atan2f
 #endif // ALI_ATAN2F
 
+#ifndef PI
+#define PI 3.141592653f
+#endif // PI
+
 typedef struct {
     ali_f32 x, y;
 }AliVector2;
@@ -319,6 +323,8 @@ ali_u64 ali_rand() {
 #undef ALI_MATH_REMOVE_PREFIX
 
 #ifndef ALI_TYPES_
+#ifndef ALI_TYPES_ALIASES_
+#define ALI_TYPES_ALIASES_
 typedef ali_u8 u8;
 typedef ali_u16 u16;
 typedef ali_u32 u32;
@@ -337,6 +343,7 @@ typedef ali_f64 f64;
 
 typedef ali_usize usize;
 typedef ali_isize isize;
+#endif // ALI_TYPES_ALIASES_
 #endif // ALI_TYPES_
 
 #define VECTOR2_FMT ALI_VECTOR2_FMT

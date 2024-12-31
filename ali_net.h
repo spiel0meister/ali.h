@@ -154,6 +154,8 @@ defer:
 #define log_error ali_log_error
 
 #ifdef ALI_TYPES_
+#ifndef ALI_TYPES_ALIASES_
+#define ALI_TYPES_ALIASES_
 #define u8 ali_u8
 #define u16 ali_u16
 #define u32 ali_u32
@@ -172,6 +174,7 @@ defer:
 
 #define usize ali_usize
 #define isize ali_isize
+#endif // ALI_TYPES_ALIASES_
 #endif // ALI_TYPES_
 
 #define tcp_server_socket ali_tcp_server_socket
