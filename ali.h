@@ -255,7 +255,7 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 
 #define ali_arena_da_maybe_resize(arena, da, to_add) ((da) = ali_arena_da_maybe_resize_with_size(arena, da, to_add, sizeof(*(da))))
 
-#define ali_da_reset(arena, da) if ((da) != NULL) { ali_da_get_header(arena, da)->count = 0; }
+#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(NULL, da)->count = 0; }
 
 #define ali_arena_da_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_da_get_header(arena, da)->count++] = item)
 #define ali_arena_da_shallow_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_da_get_header(arena, da)->count] = item)
@@ -385,6 +385,7 @@ typedef struct {
 
 void ali_sb_maybe_resize(AliSb* self, ali_usize to_add);
 void ali_sb_push_strs_null(AliSb* self, ...);
+void ali_sb_push_nstr(AliSb* self, char* start, ali_usize n);
 ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...);
 void ali_sb_free(AliSb* self);
@@ -1254,6 +1255,12 @@ void ali_sb_push_strs_null(AliSb* self, ...) {
 	va_end(args);
 }
 
+void ali_sb_push_nstr(AliSb* self, char* start, ali_usize n) {
+    ali_sb_maybe_resize(self, n);
+    ALI_MEMCPY(self->data + self->count, start, n);
+    self->count += n;
+}
+
 void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
@@ -1569,9 +1576,9 @@ void ali_c_builder_add_flags_(AliCBuilder* builder, ...) {
 }
 
 void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliArena* arena, char* target, char* src) {
-    ali_da_reset(builder->arena, builder->srcs);
-    ali_da_reset(builder->arena, builder->cflags);
-    ali_da_reset(builder->arena, builder->libs);
+    ali_da_reset(builder->srcs);
+    ali_da_reset(builder->cflags);
+    ali_da_reset(builder->libs);
 
 #if __GNUC__
     builder->cc = "gcc";
@@ -1886,6 +1893,7 @@ typedef ali_isize isize;
 #define sb_push_sprintf ali_sb_push_sprintf
 #define sb_free ali_sb_free
 
+#define sb_push_nstr ali_sb_push_nstr
 #define sb_push_strs ali_sb_push_strs
 #define sb_to_sv ali_sb_to_sv
 
