@@ -710,6 +710,8 @@ AliRegion* ali_region_new(ali_usize capacity) {
 }
 
 void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
+    ALI_ASSERT(size < ALI_REGION_DEFAULT_CAP);
+
 	if (self->count + size >= self->capacity) return NULL;
 	self->count += self->count % alignment;
 	void* ptr = self->data + self->count;
