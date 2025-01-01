@@ -291,6 +291,7 @@ AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size);
 #define ali_da_to_slice(da) ali_da_to_slice_with_size(da, sizeof(*(da)))
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size);
 #define ali_da_slice(da, start, end_exclusive) ali_da_slice_with_size(da, start, end_exclusive, sizeof(*(da)))
+AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive);
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive);
 void* ali_slice_get(AliSlice slice, ali_usize i);
 
@@ -859,6 +860,18 @@ AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusi
         .count = end_exclusive - start,
         .item_size = item_size,
         .data = (ali_u8*)(da) + start * item_size
+    };
+    return slice;
+}
+
+AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive) {
+    ALI_ASSERT(start < strlen(str));
+    ALI_ASSERT(end_exclusive <= strlen(str));
+
+    AliSlice slice = {
+        .item_size = 1,
+        .count = end_exclusive - start,
+        .data = (ali_u8*)str + start,
     };
     return slice;
 }
@@ -1767,6 +1780,7 @@ typedef ali_isize isize;
 
 #define da_to_slice ali_da_to_slice
 #define da_slice ali_da_slice
+#define slice_cstr ali_slice_cstr
 #define slice_slice ali_slice_slice
 #define slice_get ali_slice_get
 
