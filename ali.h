@@ -365,9 +365,8 @@ AliSv ali_sv_chop_left(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_right(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_by_c(AliSv* self, char c);
 
-bool ali_sv_chop_long(AliSv* self, int base, long* out);
-bool ali_sv_chop_float(AliSv* self, float* out);
-bool ali_sv_chop_double(AliSv* self, double* out);
+bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
 
 bool ali_sv_eq(AliSv left, AliSv right);
 bool ali_sv_starts_with(AliSv self, AliSv prefix);
@@ -1141,6 +1140,44 @@ AliSv ali_sv_chop_by_c(AliSv* self, char c) {
 	return chopped;
 }
 
+bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    ali_u64 number = 0;
+    while (sv->len > 0 && isdigit(sv->start[0])) {
+        number *= 10;
+        number += sv->start[0] - '0';
+        ali_sv_step(sv);
+    }
+
+    *out = number;
+    return true;
+}
+
+bool ali_sv_chop_f64(AliSv* sv, ali_f64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    ali_f64 number = 0;
+    while (sv->len > 0 && isdigit(sv->start[0])) {
+        number *= 10;
+        number += sv->start[0] - '0';
+        ali_sv_step(sv);
+    }
+
+    if (sv->len > 0 && sv->start[0] == '.') {
+        ali_sv_step(sv);
+        ali_f64 after_decimal = 10;
+        while (sv->len > 0 && isdigit(sv->start[0])) {
+            number += (sv->start[0] - '0') / after_decimal;
+            after_decimal *= 10;
+            ali_sv_step(sv);
+        }
+    }
+
+    *out = number;
+    return true;
+}
+
 AliSv ali_sv_chop_left(AliSv* self, ali_usize n) {
 	if (self->len < n) n = self->len;
 
@@ -1158,45 +1195,6 @@ AliSv ali_sv_chop_right(AliSv* self, ali_usize n) {
 	self->len -= n;
 
 	return chunk;
-}
-
-bool ali_sv_chop_long(AliSv* self, int base, long* out) {
-	char* endptr;
-	long num = strtol(self->start, &endptr, base);
-	if (endptr == self->start) return false;
-	*out = num;
-
-	ali_usize n = endptr - self->start;
-	self->start += n;
-	self->len -= n;
-
-	return true;
-}
-
-bool ali_sv_chop_float(AliSv* self, float* out) {
-	char* endptr;
-	float num = strtof(self->start, &endptr);
-	if (endptr == self->start) return false;
-	*out = num;
-
-	ali_usize n = endptr - self->start;
-	self->start += n;
-	self->len -= n;
-
-	return true;
-}
-
-bool ali_sv_chop_double(AliSv* self, double* out) {
-	char* endptr;
-	double num = strtod(self->start, &endptr);
-	if (endptr == self->start) return false;
-	*out = num;
-
-	ali_usize n = endptr - self->start;
-	self->start += n;
-	self->len -= n;
-
-	return true;
 }
 
 bool ali_sv_eq(AliSv left, AliSv right) {
@@ -1865,6 +1863,9 @@ typedef ali_isize isize;
 #define sv_chop_left ali_sv_chop_left
 #define sv_chop_right ali_sv_chop_right
 #define sv_chop_by_c ali_sv_chop_by_c
+
+#define sv_chop_u64 ali_sv_chop_u64
+#define sv_chop_f64 ali_sv_chop_f64
 
 #define sv_chop_long ali_sv_chop_long
 #define sv_chop_float ali_sv_chop_float
