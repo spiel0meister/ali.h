@@ -287,6 +287,7 @@ typedef struct {
     ali_u8* data;
 }AliSlice;
 
+AliSlice ali_slice_from_parts(void* data, ali_usize count, ali_usize item_size);
 AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size);
 #define ali_da_to_slice(da) ali_da_to_slice_with_size(da, sizeof(*(da)))
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size);
@@ -350,8 +351,10 @@ typedef struct {
 #define ALI_SV_FMT "%.*s"
 #define ALI_SV_F(sv) (int)(sv).len, (sv).start
 
-#define ali_sv_from_cstr(cstr) ((AliSv) { .start = cstr, .len = strlen(cstr) })
 #define ali_sv_from_parts(start_, len_) ((AliSv) { .start = start_, .len = len_ })
+#define ali_sv_from_parts(start_, len_) ((AliSv) { .start = start_, .len = len_ })
+#define ali_sv_from_cstr(cstr) ((AliSv) { .start = cstr, .len = strlen(cstr) })
+#define ali_sv_from_cstr_static(cstr) ((AliSv) { .start = cstr, .len = sizeof(cstr) - 1 })
 
 void ali_sv_step(AliSv* self);
 AliSv ali_sv_trim_left(AliSv self);
@@ -842,6 +845,15 @@ void* ali_da_free_with_size(void* da, ali_usize item_size) {
 // @module ali_da end
 
 // @module ali_slice
+
+AliSlice ali_slice_from_parts(void* data, ali_usize count, ali_usize item_size) {
+    AliSlice slice = {
+        .item_size = item_size,
+        .count = count,
+        .data = data,
+    };
+    return slice;
+}
 
 AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size) {
     AliSlice slice = {
@@ -1778,6 +1790,7 @@ typedef ali_isize isize;
 
 // @module ali_slice
 
+#define slice_from_parts ali_slice_from_parts
 #define da_to_slice ali_da_to_slice
 #define da_slice ali_da_slice
 #define slice_cstr ali_slice_cstr
