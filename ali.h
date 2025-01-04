@@ -6,6 +6,7 @@
 		- logging (ali_log)
         - cli flags parsing (ali_flag)
 		- arena (ali_arena)
+        - testing (ali_testing)
 		- dynamic array (ali_da)
 		- slices (ali_slice)
 		- temp allocator (ali_temp_alloc)
@@ -235,6 +236,29 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark);
 void ali_arena_reset(AliArena* self);
 void ali_arena_free(AliArena* self);
 // @module ali_arena end
+
+// @module ali_testing
+
+typedef struct {
+    // Use this if you need random numbers
+    ali_u64 seed;
+
+    // Use this arena, if you need dynamic memory
+    AliArena arena;
+
+    ali_usize error_count;
+}AliTesting;
+
+typedef void (*ali_test_t)(AliTesting* t);
+void ali_testing_run(AliTesting* t, ali_test_t test);
+void ali_testing_print(AliTesting* t);
+void ali_testing__fail(AliTesting* t, const char* file, int line, const char* func);
+bool ali_testing__expect(AliTesting* t, bool ok, const char* file, int line, const char* func, const char* fmt, ...);
+
+#define ali_testing_fail(t) ali_testing__fail(t, __FILE__, __LINE__, __func__)
+#define ali_testing_expect(t, ok, ...) ali_testing__expect(t, ok, __FILE__, __LINE__, __func__, __VA_ARGS__)
+
+// @module ali_testing end
 
 // @module ali_da
 #ifndef ALI_DA_DEFAULT_INIT_CAPACITY
@@ -835,6 +859,42 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
 }
 
 // @module ali_arena end
+
+// @module ali_testing
+
+void ali_testing_run(AliTesting* t, ali_test_t test) {
+    test(t);
+}
+
+void ali_testing_print(AliTesting* t) {
+    if (t->error_count != 0) {
+        ali_logn_error("%lu test(s) failed", t->error_count);
+    }
+}
+
+void ali_testing__fail(AliTesting* t, const char* file, int line, const char* func) {
+    ali_logn_error("%s:%d: %s: FAIL", file, line, func);
+    t->error_count++;
+}
+
+bool ali_testing__expect(AliTesting* t, bool ok, const char* file, int line, const char* func, const char* fmt, ...) {
+    if (!ok) {
+        va_list args;
+
+        va_start(args, fmt);
+        ali_log_log(LOG_ERROR, "%s:%d: %s: ", file, line, func);
+        va_end(args);
+
+        va_start(args, fmt);
+        ali_log_logn_va(LOG_ERROR, fmt, args);
+        va_end(args);
+
+        t->error_count++;
+    }
+    return ok;
+}
+
+// @module ali_testing end
 
 // @module ali_da
 AliDaHeader* ali_da_new_header_with_size(AliArena* arena, ali_usize init_capacity, ali_usize item_size) {
@@ -1865,6 +1925,15 @@ typedef ali_isize isize;
 #define arena_reset ali_arena_reset
 #define arena_free ali_arena_free
 // @module ali_arena end
+
+// @module ali_testing
+
+#define testing_run ali_testing_run
+#define testing_print ali_testing_print
+#define testing_fail ali_testing_fail
+#define testing_expect ali_testing_expect
+
+// @module ali_testing end
 
 // @module ali_utf8
 // NOTE: we mustn't do this
