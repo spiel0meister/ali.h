@@ -145,6 +145,7 @@ extern AliLogLevel ali_global_loglevel;
 
 void ali_init_global_log();
 
+void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args);
 ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_log_log(AliLogLevel level, const char* fmt, ...);
 
@@ -541,17 +542,21 @@ const char* loglevel_to_str[LOG_COUNT_] = {
 FILE* ali_global_logfile = NULL;
 AliLogLevel ali_global_loglevel = LOG_INFO;
 
-void ali_log_log(AliLogLevel level, const char* fmt, ...) {
+void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args) {
 	if (ali_global_logfile == NULL) ali_global_logfile = stdout;
-
-	va_list args;
-	va_start(args, fmt);
 
 	if (ali_global_loglevel <= level) {
 		fprintf(ali_global_logfile, "[%s] ", loglevel_to_str[level]);
 		vfprintf(ali_global_logfile, fmt, args);
 		fprintf(ali_global_logfile, "\n");
 	}
+}
+
+void ali_log_log(AliLogLevel level, const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+
+    ali_log_log_va(level, fmt, args);
 
 	va_end(args);
 }
@@ -1750,6 +1755,7 @@ typedef ali_isize isize;
 #define global_loglevel ali_global_loglevel
 
 #define log_log ali_log_log
+#define log_log_va ali_log_log_va
 
 #define log_info ali_log_info
 #define log_warn ali_log_warn
