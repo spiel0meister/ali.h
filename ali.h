@@ -145,18 +145,20 @@ extern AliLogLevel ali_global_loglevel;
 
 void ali_init_global_log();
 
+void ali_log_logn_va(AliLogLevel level, const char* fmt, va_list args);
 void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args);
 ALI_FORMAT_ATTRIBUTE(2, 3)
+void ali_log_logn(AliLogLevel level, const char* fmt, ...);
 void ali_log_log(AliLogLevel level, const char* fmt, ...);
 
-#define ali_log_info(...) ali_log_log(LOG_INFO, __VA_ARGS__)
-#define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
-#define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
+#define ali_logn_info(...) ali_log_logn(LOG_INFO, __VA_ARGS__)
+#define ali_logn_warn(...) ali_log_logn(LOG_WARN, __VA_ARGS__)
+#define ali_logn_error(...) ali_log_logn(LOG_ERROR, __VA_ARGS__)
 
 #else // ALI_LOG_END
-#define ali_log_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
-#define ali_log_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
-#define ali_log_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
+#define ali_logn_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#define ali_logn_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#define ali_logn_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
 #endif // ALI_NO_LOG
 // @module ali_log end
 
@@ -542,7 +544,7 @@ const char* loglevel_to_str[LOG_COUNT_] = {
 FILE* ali_global_logfile = NULL;
 AliLogLevel ali_global_loglevel = LOG_INFO;
 
-void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args) {
+void ali_log_logn_va(AliLogLevel level, const char* fmt, va_list args) {
 	if (ali_global_logfile == NULL) ali_global_logfile = stdout;
 
 	if (ali_global_loglevel <= level) {
@@ -550,6 +552,24 @@ void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args) {
 		vfprintf(ali_global_logfile, fmt, args);
 		fprintf(ali_global_logfile, "\n");
 	}
+}
+
+void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args) {
+	if (ali_global_logfile == NULL) ali_global_logfile = stdout;
+
+	if (ali_global_loglevel <= level) {
+		fprintf(ali_global_logfile, "[%s] ", loglevel_to_str[level]);
+		vfprintf(ali_global_logfile, fmt, args);
+	}
+}
+
+void ali_log_logn(AliLogLevel level, const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+
+    ali_log_logn_va(level, fmt, args);
+
+	va_end(args);
 }
 
 void ali_log_log(AliLogLevel level, const char* fmt, ...) {
@@ -560,6 +580,7 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 
 	va_end(args);
 }
+
 #endif // ALI_LOG_END
 // @module ali_log end
 
@@ -662,21 +683,21 @@ while_loop: while (argc > 0) {
                     switch (ali_flag_list[j].type) {
                         case FLAG_STRING:
                             if (argc == 0) {
-                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
                                 return -1;
                             }
                             ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
                             break;
                         case FLAG_U64:
                             if (argc == 0) {
-                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
                                 return -1;
                             }
                             ali_flag_list[j].as.num_u64 = atol(ali_shift_args(&argc, &argv));
                             break;
                         case FLAG_F64:
                             if (argc == 0) {
-                                ali_log_error("%s requires an arguement", ali_flag_list[j].name);
+                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
                                 return -1;
                             }
                             char* endptr;
@@ -1288,7 +1309,7 @@ void ali_sb_free(AliSb* self) {
 bool ali_sb_read_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "rb");
 	if (f == NULL) {
-		ali_log_error("Couldn't read %s: %s\n", path, strerror(errno));
+		ali_logn_error("Couldn't read %s: %s", path, strerror(errno));
 		return false;
 	}
 
@@ -1307,7 +1328,7 @@ bool ali_sb_read_file(AliSb* self, const char* path) {
 bool ali_sb_write_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "wb");
 	if (f == NULL) {
-		ali_log_error("Couldn't write to %s: %s\n", path, strerror(errno));
+		ali_logn_error("Couldn't write to %s: %s", path, strerror(errno));
 		return false;
 	}
 
@@ -1378,7 +1399,7 @@ void ali_measure_end(const char* name) {
 
 void ali_print_measurements(void) {
 	for (ali_usize i = 0; i < measurements_count; ++i) {
-		ali_log_info("[ali_measure] %s: %lfs", measurements[i].name, measurements[i].total / measurements[i].count);
+		ali_logn_info("[ali_measure] %s: %lfs", measurements[i].name, measurements[i].total / measurements[i].count);
 	}
 }
 
@@ -1422,7 +1443,7 @@ char* ali_cmd_render(char** cmd) {
 pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
     ali_usize stamp = ali_temp_stamp();
     char* render = ali_cmd_render(cmd);
-    ali_log_info("[CMD] %s", render);
+    ali_logn_info("[CMD] %s", render);
     ali_temp_rewind(stamp);
 
     bool should_redirect_stdin = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDIN) != 0;
@@ -1431,21 +1452,21 @@ pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
 
     if (should_redirect_stdout || should_redirect_stderr) {
         if (pipe(redirect->out_pipe) < 0) {
-            ali_log_error("Couldn't create pipe: %s\n", strerror(errno));
+            ali_logn_error("Couldn't create pipe: %s", strerror(errno));
             return -1;
         }
     }
 
     if (should_redirect_stdin) {
         if (pipe(redirect->in_pipe) < 0) {
-            ali_log_error("Couldn't create pipe: %s\n", strerror(errno));
+            ali_logn_error("Couldn't create pipe: %s", strerror(errno));
             return -1;
         }
     }
 
     pid_t pid = fork();
     if (pid < 0) {
-        ali_log_error("Couldn't fork: %s\n", strerror(errno));
+        ali_logn_error("Couldn't fork: %s", strerror(errno));
         return -1;
     } else if (pid == 0) {
         if (should_redirect_stdin) {
@@ -1462,7 +1483,7 @@ pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
 
         execvp(cmd[0], cmd);
 
-        ali_log_error("Couldn't start process: %s\n", strerror(errno));
+        ali_logn_error("Couldn't start process: %s", strerror(errno));
         exit(1);
     }
     
@@ -1473,14 +1494,14 @@ bool ali_wait_for_process(pid_t pid) {
     for (;;) {
         int wstatus;
         if (waitpid(pid, &wstatus, 0) < 0) {
-            ali_log_error("Couldn't waitpid for %s", strerror(errno));
+            ali_logn_error("Couldn't waitpid for %s", strerror(errno));
             return false;
         }
 
         if (WIFEXITED(wstatus)) {
             int estatus = WEXITSTATUS(wstatus);
             if (estatus != 0) {
-                ali_log_error("Process %d exited with status %d", pid, estatus);
+                ali_logn_error("Process %d exited with status %d", pid, estatus);
                 return false;
             }
 
@@ -1489,7 +1510,7 @@ bool ali_wait_for_process(pid_t pid) {
 
         if (WIFSIGNALED(wstatus)) {
             int sig = WTERMSIG(wstatus);
-            ali_log_error("Process %d exited with signal %d (%s)", pid, sig, strsignal(sig));
+            ali_logn_error("Process %d exited with signal %d (%s)", pid, sig, strsignal(sig));
             return false;
         }
     }
@@ -1513,7 +1534,7 @@ bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_
 
     if (stat(output, &st) < 0) {
         if (errno == ENOENT) return true;
-        ali_log_error("Couldn't stat %s: %s", output, strerror(errno));
+        ali_logn_error("Couldn't stat %s: %s", output, strerror(errno));
         return false;
     }
 
@@ -1521,7 +1542,7 @@ bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_
 
     for (ali_usize i = 0; i < input_count; ++i) {
         if (stat(inputs[i], &st) < 0) {
-            ali_log_error("Couldn't stat %s: %s", inputs[i], strerror(errno));
+            ali_logn_error("Couldn't stat %s: %s", inputs[i], strerror(errno));
             return false;
         }
 
@@ -1617,11 +1638,11 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
     }
 
     if (force || ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->srcs))) {
-        ali_log_info("Building %s", builder->target);
+        ali_logn_info("Building %s", builder->target);
 
         ali_cmd_append_args(cmd, builder->cc);
         if (ali_da_getlen(builder->srcs) == 0) {
-            ali_log_error("No source files");
+            ali_logn_error("No source files");
             return false;
         }
         ali_da_foreach(builder->cflags, char*, flag) {
@@ -1648,13 +1669,13 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
         }
         bool ret = ali_cmd_run_sync_and_reset(*cmd);
         if (ret) {
-            ali_log_info("Built %s", builder->target);
+            ali_logn_info("Built %s", builder->target);
         } else {
-            ali_log_error("Failed to built %s", builder->target);
+            ali_logn_error("Failed to built %s", builder->target);
         }
         return ret;
     } else {
-        ali_log_warn("No need to build %s", builder->target);
+        ali_logn_warn("No need to build %s", builder->target);
         return true;
     }
 }
@@ -1680,7 +1701,7 @@ bool ali_remove(char*** cmd, const char* path) {
 
 bool ali_dup2_logged(int fd1, int fd2) {
     if (dup2(fd1, fd2) < 0) {
-        ali_log_error("Couldn't dup2: %s\n", strerror(errno));
+        ali_logn_error("Couldn't dup2: %s", strerror(errno));
         return false;
     }
     return true;
@@ -1689,7 +1710,7 @@ bool ali_dup2_logged(int fd1, int fd2) {
 bool ali_create_dir_if_not_exists(const char* path) {
     if (mkdir(path, 0766) < 0) {
         if (errno != EEXIST) {
-            ali_log_error("Couldn't create %s: %s\n", path, strerror(errno));
+            ali_logn_error("Couldn't create %s: %s", path, strerror(errno));
             return false;
         }
     }
@@ -1754,12 +1775,14 @@ typedef ali_isize isize;
 #define global_logfile ali_global_logfile
 #define global_loglevel ali_global_loglevel
 
+#define log_logn ali_log_logn
+#define log_logn_va ali_log_logn_va
 #define log_log ali_log_log
 #define log_log_va ali_log_log_va
 
-#define log_info ali_log_info
-#define log_warn ali_log_warn
-#define log_error ali_log_error
+#define logn_info ali_logn_info
+#define logn_warn ali_logn_warn
+#define logn_error ali_logn_error
 
 // @module ali_log end
 
