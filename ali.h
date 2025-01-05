@@ -343,6 +343,8 @@ void* ali_slice_get(AliSlice slice, ali_usize i);
 #endif // ALI_TEMP_BUF_SIZE
 
 void* ali_temp_alloc(ali_usize size);
+char* ali_temp_strdup(const char* str);
+char* ali_temp_strndup(const char* start, ali_usize count);
 void* ali_temp_memdup(void* data, ali_usize data_size);
 ALI_FORMAT_ATTRIBUTE(1, 2) char* ali_temp_sprintf(const char* fmt, ...);
 void* ali_temp_get_cur();
@@ -484,6 +486,7 @@ bool ali_rename(char*** cmd, const char* from, const char* to);
 bool ali_remove(char*** cmd, const char* path);
 
 bool ali_create_dir_if_not_exists(const char* path);
+bool ali_create_dir_all_if_not_exists(const char* path);
 
 #define ali_rebuild_yourself(cmd, argc, argv) do { \
     const char* src = __FILE__; \
@@ -1025,6 +1028,13 @@ char* ali_temp_strdup(const char* str) {
 	ali_usize size = strlen(str) + 1;
 	char* copy = ali_temp_alloc(size);
 	return ALI_MEMCPY(copy, str, size);
+}
+
+char* ali_temp_strndup(const char* start, ali_usize count) {
+    char* copy = ali_temp_alloc(count + 1);
+    ALI_MEMCPY(copy, start, count);
+    copy[count] = 0;
+    return copy;
 }
 
 char* ali_temp_sprintf(const char* fmt, ...) {
@@ -1787,6 +1797,27 @@ bool ali_create_dir_if_not_exists(const char* path) {
     return true;
 }
 
+bool ali_create_dir_all_if_not_exists(const char* path) {
+    ali_usize stamp = ali_temp_stamp();
+
+    const char* slash = strchr(path, '/');
+    while (slash != NULL) {
+        ali_usize count = slash - path;
+        char* dir = ali_temp_strndup(path, count);
+        if (strcmp(dir, ".") != 0 && strcmp(dir, "..") != 0) {
+            if (!ali_create_dir_if_not_exists(dir)) return false;
+        }
+        slash = strchr(slash + 1, '/');
+    }
+
+    ali_temp_rewind(stamp);
+    if (!ali_create_dir_if_not_exists(path)) return false;
+
+    ali_logn_info("Created dir %s or already exists", path);
+
+    return true;
+}
+
 // @module ali_cmd end
 
 #endif // ALI_IMPLEMENTATION
@@ -1916,9 +1947,10 @@ typedef ali_isize isize;
 // @module ali_temp_alloc
 
 #define temp_alloc ali_temp_alloc
+#define temp_strdup ali_temp_strdup
+#define temp_strndup ali_temp_strndup
 #define temp_memdup ali_temp_memdup
 #define temp_sprintf ali_temp_sprintf
-#define temp_strdup ali_temp_strdup
 #define temp_stamp ali_temp_stamp
 #define temp_rewind ali_temp_rewind
 #define temp_reset ali_temp_reset
@@ -2035,6 +2067,7 @@ typedef ali_isize isize;
 #define needs_rebuild ali_needs_rebuild
 #define needs_rebuild1 ali_needs_rebuild1
 #define create_dir_if_not_exists ali_create_dir_if_not_exists
+#define create_dir_all_if_not_exists ali_create_dir_all_if_not_exists
 #define rebuild_yourself ali_rebuild_yourself
 
 #define c_builder_add_srcs ali_c_builder_add_srcs
