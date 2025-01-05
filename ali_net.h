@@ -33,19 +33,19 @@ typedef ali_i64 ali_isize;
 #define ALI_RETURN_DEFER(thing) do { result = thing; goto defer; } while (0)
 #endif // ALI_RETURN_DEFER
 
-#ifndef ali_log_info
+#ifndef ali_logn_info
 #include <stdio.h>
-#define ali_log_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
-#endif // ali_log_info
+#define ali_logn_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#endif // ali_logn_info
 
-#ifndef ali_log_warn
+#ifndef ali_logn_warn
 #include <stdio.h>
-#define ali_log_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
+#define ali_logn_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
 #endif // ali_log_warn
 
-#ifndef ali_log_error
+#ifndef ali_logn_error
 #include <stdio.h>
-#define ali_log_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
+#define ali_logn_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
 #endif // ali_log_error
 
 ali_i32 ali_tcp_server_socket(const char* host, ali_u16 port, ali_i32 backlog);
@@ -69,13 +69,13 @@ ali_i32 ali_tcp_server_socket(const char* host, ali_u16 port, ali_i32 backlog) {
     bool result = true;
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        ali_log_error("Couldn't create socket: %s", strerror(errno));
+        ali_logn_error("Couldn't create socket: %s", strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
     int reuse = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        ali_log_error("Couldn't set option SO_REUSEADDR on socket: %s", strerror(errno));
+        ali_logn_error("Couldn't set option SO_REUSEADDR on socket: %s", strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
@@ -85,12 +85,12 @@ ali_i32 ali_tcp_server_socket(const char* host, ali_u16 port, ali_i32 backlog) {
     inet_aton(host, &addr.sin_addr);
 
     if (bind(sockfd, (void*)&addr, sizeof(addr)) < 0) {
-        ali_log_error("Couldn't bind socket to %s:%d: %s", host, port, strerror(errno));
+        ali_logn_error("Couldn't bind socket to %s:%d: %s", host, port, strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
     if (listen(sockfd, backlog) < 0) {
-        ali_log_error("Couldn't listen on socket: %s", strerror(errno));
+        ali_logn_error("Couldn't listen on socket: %s", strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
@@ -109,7 +109,7 @@ ali_i32 ali_tcp_server_accept(ali_i32 sockfd, char** host, ali_u16* port) {
     socklen_t addrlen = sizeof(addr);
     ali_i32 clientfd = accept(sockfd, (void*)&addr, &addrlen);
     if (clientfd < 0) {
-        ali_log_error("Couldn't accept connection: %s", strerror(errno));
+        ali_logn_error("Couldn't accept connection: %s", strerror(errno));
         return -1;
     }
 
@@ -123,7 +123,7 @@ ali_i32 ali_tcp_client_connect(const char* host, ali_u16 port) {
     bool result = true;
     ali_i32 sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        ali_log_error("Couldn't create socket: %s", strerror(errno));
+        ali_logn_error("Couldn't create socket: %s", strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
@@ -133,7 +133,7 @@ ali_i32 ali_tcp_client_connect(const char* host, ali_u16 port) {
     inet_aton(host, &addr.sin_addr);
 
     if (connect(sockfd, (void*)&addr, sizeof(addr)) < 0) {
-        ali_log_error("Couldn't connect on %s:%d: %s", host, port, strerror(errno));
+        ali_logn_error("Couldn't connect on %s:%d: %s", host, port, strerror(errno));
         ALI_RETURN_DEFER(false);
     }
 
