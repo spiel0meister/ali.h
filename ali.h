@@ -2039,3 +2039,36 @@ typedef ali_isize isize;
 
 #endif // ALI_REMOVE_PREFIX
 
+#ifdef ALI_INTERNAL_TESTING
+static void test_add_and_sub_u64_ckecked(AliTesting* testing) {
+    u64 res;
+
+    u64 a1 = 1;
+    u64 b1 = 1;
+    ali_testing_expect(testing, ali_add_u64_checked(a1, b1, &res), "adding 1 + 1 should succeed");
+
+    u64 a2 = UINT64_MAX;
+    u64 b2 = 1;
+    ali_testing_expect(testing, !ali_add_u64_checked(a2, b2, &res), "adding UINT64_MAX + 1 should fail");
+
+    u64 a3 = 1;
+    u64 b3 = 1;
+    ali_testing_expect(testing, ali_sub_u64_checked(a3, b3, &res), "subtracting 1 - 1 should succeed");
+
+    u64 a4 = 1;
+    u64 b4 = 2;
+    ali_testing_expect(testing, !ali_sub_u64_checked(a4, b4, &res), "subtracting 1 - 2 should fail");
+}
+
+static ali_test_t internal_tests[] = {
+    test_add_and_sub_u64_ckecked,
+};
+
+void ali_run_internal_tests() {
+    AliTesting testing = {0};
+    for (ali_usize i = 0; i < ALI_ARRAY_LEN(internal_tests); ++i) {
+        ali_testing_run(&testing, internal_tests[i]);
+    }
+    ali_testing_print(&testing);
+}
+#endif // ALI_INTERNAL_TESTING
