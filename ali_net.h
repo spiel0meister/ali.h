@@ -149,9 +149,9 @@ defer:
 
 #ifdef ALI_NET_REMOVE_PREFIX
 
-#define log_info ali_log_info
-#define log_warn ali_log_warn
-#define log_error ali_log_error
+#define logn_info ali_logn_info
+#define logn_warn ali_logn_warn
+#define logn_error ali_logn_error
 
 #ifdef ALI_TYPES_
 #ifndef ALI_TYPES_ALIASES_
