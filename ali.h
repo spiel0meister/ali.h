@@ -274,23 +274,28 @@ typedef struct {
 	ali_u8 data[];
 }AliDaHeader;
 
-AliDaHeader* ali_da_new_header_with_size(AliArena* arena, ali_usize init_capacity, ali_usize item_size);
-AliDaHeader* ali_da_get_header_with_size(AliArena* arena, void* da, ali_usize item_size);
-void* ali_da_free_with_size(void* da, ali_usize item_size);
+AliDaHeader* ali_arena_da_new_header_with_size(AliArena* arena, ali_usize init_capacity, ali_usize item_size);
+AliDaHeader* ali_arena_da_get_header_with_size(AliArena* arena, void* da, ali_usize item_size);
 void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize to_add, ali_usize item_size);
+void* ali_da_free_with_size(void* da, ali_usize item_size);
 
-#define ali_da_new_header(arena, init_capacity) ali_da_new_header_with_size(arena, init_capacity, sizeof(*(da)))
-#define ali_da_get_header(arena, da) ali_da_get_header_with_size(arena, da, sizeof(*(da)))
-#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(NULL, da)->count)
+#define ali_arena_da_new_header(arena, init_capacity, item_size) ali_arena_da_new_header_with_size(arena, init_capacity, item_size)
+#define ali_arena_da_get_header(arena, da) ali_arena_da_get_header_with_size(arena, da, sizeof(*(da)))
+
+#define ali_da_new_header(init_capacity, item_size) ali_arena_da_new_header(NULL, init_capacity, item_size)
+#define ali_da_get_header(da) ali_arena_da_get_header(NULL, da)
+
+#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
 
 #define ali_arena_da_maybe_resize(arena, da, to_add) ((da) = ali_arena_da_maybe_resize_with_size(arena, da, to_add, sizeof(*(da))))
+#define ali_da_maybe_resize(da, to_add) ((da) = ali_arena_da_maybe_resize(NULL, da, to_add))
 
-#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(NULL, da)->count = 0; }
+#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(da)->count = 0; }
 
-#define ali_arena_da_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_da_get_header(arena, da)->count++] = item)
-#define ali_arena_da_shallow_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_da_get_header(arena, da)->count] = item)
+#define ali_arena_da_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_arena_da_get_header(arena, da)->count++] = item)
+#define ali_arena_da_shallow_append(arena, da, item) (ali_arena_da_maybe_resize(arena, da, 1), (da)[ali_arena_da_get_header(arena, da)->count] = item)
 #define ali_arena_da_append_many(arena, da, items, item_count) do { \
-    da = ali_arena_da_maybe_resize_with_size(arena, da, 1, sizeof(*(da))); \
+    ali_arena_da_maybe_resize(arena, da, 1); \
     memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
     ali_da_get_header(da)->count += item_count; \
 } while (0)
@@ -300,8 +305,8 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 #define ali_da_append_many(da, items, item_count) ali_arena_da_append_many(NULL, da, items, item_count)
 
 #define ali_da_free(da) ((da) = ali_da_free_with_size(da, sizeof(*(da))))
-#define ali_da_remove_unordered(arena, da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(arena, da)->count])
-#define ali_da_remove_ordered(arena, da, i) (ALI_ASSERT(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(arena, da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
+#define ali_da_remove_unordered(da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
+#define ali_da_remove_ordered(da, i) (ALI_ASSERT(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
 
 #define ali_da_for(da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
@@ -900,21 +905,21 @@ bool ali_testing__expect(AliTesting* t, bool ok, const char* file, int line, con
 // @module ali_testing end
 
 // @module ali_da
-AliDaHeader* ali_da_new_header_with_size(AliArena* arena, ali_usize init_capacity, ali_usize item_size) {
+AliDaHeader* ali_arena_da_new_header_with_size(AliArena* arena, ali_usize init_capacity, ali_usize item_size) {
 	AliDaHeader* h = ali_arena_alloc(arena, sizeof(*h) + item_size * init_capacity);
 	h->count = 0;
 	h->capacity = init_capacity;
 	return h;
 }
 
-AliDaHeader* ali_da_get_header_with_size(AliArena* arena, void* da, ali_usize item_size) {
-	if (da == NULL) return ali_da_new_header_with_size(arena, ALI_DA_DEFAULT_INIT_CAPACITY, item_size);
+AliDaHeader* ali_arena_da_get_header_with_size(AliArena* arena, void* da, ali_usize item_size) {
+	if (da == NULL) return ali_arena_da_new_header_with_size(arena, ALI_DA_DEFAULT_INIT_CAPACITY, item_size);
 	
 	return (AliDaHeader*)da - 1;
 }
 
 void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize to_add, ali_usize item_size) {
-    AliDaHeader* h = ali_da_get_header_with_size(arena, da, item_size);
+    AliDaHeader* h = ali_arena_da_get_header_with_size(arena, da, item_size);
 
     if (h->count + to_add >= h->capacity) {
         ali_usize old_capacity = h->capacity;
@@ -928,7 +933,7 @@ void* ali_arena_da_maybe_resize_with_size(AliArena* arena, void* da, ali_usize t
 }
 
 void* ali_da_free_with_size(void* da, ali_usize item_size) {
-	AliDaHeader* h = ali_da_get_header_with_size(NULL, da, item_size);
+	AliDaHeader* h = ali_arena_da_get_header_with_size(NULL, da, item_size);
 	ALI_FREE(h);
 	return (da = NULL);
 }
@@ -1588,7 +1593,7 @@ bool ali_cmd_run_sync(char** cmd) {
 
 bool ali_cmd_run_sync_and_reset(char** cmd) {
     bool ret = ali_cmd_run_sync(cmd);
-    ali_da_get_header(NULL, cmd)->count = 0;
+    ali_da_get_header(cmd)->count = 0;
     return ret;
 }
 
@@ -1744,20 +1749,20 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
 }
 
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
-    ali_usize count = ali_da_get_header(builder->arena, builder->subbuilders)->count;
+    ali_usize count = ali_arena_da_get_header(builder->arena, builder->subbuilders)->count;
     ali_arena_da_maybe_resize(builder->arena, builder->subbuilders, 1);
-    ali_da_get_header(builder->arena, builder->subbuilders)->count++;
+    ali_arena_da_get_header(builder->arena, builder->subbuilders)->count++;
     return &builder->subbuilders[count];
 }
 
 bool ali_rename(char*** cmd, const char* from, const char* to) {
-    ali_da_get_header(NULL, *cmd)->count = 0;
+    ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
 
 bool ali_remove(char*** cmd, const char* path) {
-    ali_da_get_header(NULL, *cmd)->count = 0;
+    ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
@@ -1866,15 +1871,18 @@ typedef ali_isize isize;
 // @module ali_flag end
 
 // @module ali_da
-#define da_new_header_with_size ali_da_new_header_with_size
-#define da_get_header_with_size ali_da_get_header_with_size
-#define da_maybe_resize_with_size ali_da_maybe_resize_with_size
-#define da_free_with_size ali_da_free_with_size
+#define arena_da_new_header ali_arena_ali_da_new_header
+#define arena_da_get_header ali_arena_ali_da_get_header
+#define arena_da_maybe_resize ali_arena_ali_da_maybe_resize
 
 #define da_new_header ali_da_new_header
 #define da_get_header ali_da_get_header
 #define da_maybe_resize ali_da_maybe_resize
 #define da_getlen ali_da_getlen
+
+#define arena_da_append ali_arena_da_append
+#define arena_da_shallow_append ali_arena_da_shallow_append
+#define arena_da_append_many ali_arena_da_append_many
 
 #define da_append ali_da_append
 #define da_shallow_append ali_da_shallow_append
