@@ -322,7 +322,8 @@ typedef struct {
     ali_u8* data;
 }AliSlice;
 
-AliSlice ali_slice_from_parts(void* data, ali_usize count, ali_usize item_size);
+AliSlice ali_slice_from_parts_with_size(void* data, ali_usize count, ali_usize item_size);
+#define ali_slice_from_parts(data, count) ali_slice_from_parts_with_size(data, count, sizeof((data)[0]))
 AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size);
 #define ali_da_to_slice(da) ali_da_to_slice_with_size(da, sizeof(*(da)))
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size);
@@ -942,7 +943,7 @@ void* ali_da_free_with_size(void* da, ali_usize item_size) {
 
 // @module ali_slice
 
-AliSlice ali_slice_from_parts(void* data, ali_usize count, ali_usize item_size) {
+AliSlice ali_slice_from_parts_with_size(void* data, ali_usize count, ali_usize item_size) {
     AliSlice slice = {
         .item_size = item_size,
         .count = count,
