@@ -100,6 +100,9 @@
 
 #define ALI_FORMAT_ATTRIBUTE(str, vstart) __attribute__((__format__(printf, str, vstart)))
 
+#define ali_add_u64_checked(a, b, ptr) (*(ptr) = (a) + (b), b <= UINT64_MAX - a)
+#define ali_sub_u64_checked(a, b, ptr) (*(ptr) = (a) - (b), b <= a)
+
 // 'path/to/file.c' -> 'file.c', '/path/to/dir' -> 'dir'
 const char* ali_path_name(const char* path);
 char* ali_shift_args(int* argc, char*** argv);
@@ -1799,6 +1802,9 @@ bool ali_create_dir_if_not_exists(const char* path) {
 #define FORMAT_ATTRIBUTE ALI_FORMAT_ATTRIBUTE
 
 #define SWAP ALI_SWAP
+
+#define add_u64_checked ali_add_u64_checked
+#define sub_u64_checked ali_sub_u64_checked
 
 #define path_name ali_path_name
 #define shift_args ali_shift_args
