@@ -9,7 +9,7 @@ int main(void) {
     char buffer[] = "This is a test!";
     isize n = write(serverfd, buffer, sizeof(buffer));
     if (n < 0) {
-        log_error("Couldn't write to server: %s", strerror(errno));
+        logn_error("Couldn't write to server: %s", strerror(errno));
         return 1;
     }
 
