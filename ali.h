@@ -82,6 +82,10 @@
 #endif // ALI_ABORT
 
 // @module ali_util
+#define ALI_STRINGIFY(x) #x
+#define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
+#define ALI_HERE (__FILE__ ":" ALI_STRINGIFY_2(__LINE__))
+
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
 
@@ -389,10 +393,8 @@ typedef struct {
 #define ALI_SV_FMT "%.*s"
 #define ALI_SV_F(sv) (int)(sv).len, (sv).start
 
-#define ali_sv_from_parts(start_, len_) ((AliSv) { .start = start_, .len = len_ })
-#define ali_sv_from_parts(start_, len_) ((AliSv) { .start = start_, .len = len_ })
-#define ali_sv_from_cstr(cstr) ((AliSv) { .start = cstr, .len = strlen(cstr) })
-#define ali_sv_from_cstr_static(cstr) ((AliSv) { .start = cstr, .len = sizeof(cstr) - 1 })
+AliSv ali_sv_from_parts(char* start, ali_usize len);
+AliSv ali_sv_from_cstr(char* cstr);
 
 void ali_sv_step(AliSv* self);
 AliSv ali_sv_trim_left(AliSv self);
@@ -724,21 +726,22 @@ while_loop: while (argc > 0) {
                             }
                             ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
                             break;
-                        case FLAG_U64:
+                        case FLAG_U64: {
                             if (argc == 0) {
                                 ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
                                 return -1;
                             }
-                            ali_flag_list[j].as.num_u64 = atol(ali_shift_args(&argc, &argv));
-                            break;
-                        case FLAG_F64:
+                            AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
+                            if (!ali_sv_chop_u64(&sv, &ali_flag_list[j].as.num_u64)) return -1;
+                        }break;
+                        case FLAG_F64: {
                             if (argc == 0) {
                                 ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
                                 return -1;
                             }
-                            char* endptr;
-                            ali_flag_list[j].as.num_f64 = strtod(ali_shift_args(&argc, &argv), &endptr);
-                            break;
+                            AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
+                            if (!ali_sv_chop_f64(&sv, &ali_flag_list[j].as.num_f64)) return -1;
+                        }break;
                         case FLAG_OPTION:
                             ali_flag_list[j].as.option = true;
                             break;
@@ -1209,6 +1212,22 @@ ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, ali_usize l
 // @module ali_utf8 end
 
 // @module ali_sv
+
+AliSv ali_sv_from_parts(char* start, ali_usize len) {
+    AliSv sv = {
+        .start = start,
+        .len = len
+    };
+    return sv;
+}
+
+AliSv ali_sv_from_cstr(char* cstr) {
+    AliSv sv = {
+        .start = cstr,
+        .len = strlen(cstr)
+    };
+    return sv;
+}
 
 void ali_sv_step(AliSv* self) {
 	if (self->start == NULL || self->len == 0) return;
@@ -1826,9 +1845,14 @@ bool ali_create_dir_all_if_not_exists(const char* path) {
 #undef ALI_REMOVE_PREFIX
 
 // @module ali_util
+#define STRINGIFY ALI_STRINGIFY
+#define STRINGIFY_2 ALI_STRINGIFY_2
+#define HERE ALI_HERE
+
 #define ARRAY_LEN ALI_ARRAY_LEN
 #define INLINE_ARRAY ALI_INLINE_ARRAY
 
+#define ASSERT ALI_ASSERT
 #define UNUSED ALI_UNUSED
 #define UNREACHABLE ALI_UNREACHABLE
 #define TODO ALI_TODO
@@ -1898,7 +1922,7 @@ typedef ali_isize isize;
 
 #define flag_print_help ali_flag_print_help
 #define flag_parse ali_flag_parse
-#define flag_parse_with_program ali_flag_parse
+#define flag_parse_with_program ali_flag_parse_with_program
 
 // @module ali_flag end
 
