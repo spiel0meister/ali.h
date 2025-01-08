@@ -3,6 +3,7 @@
 	For now, it contains:
 		- some util stuff (ali_util)
 		- some simple types and aliases (ali_types)
+		- replacements for libc functions (ali_libc_replace)
 		- logging (ali_log)
         - cli flags parsing (ali_flag)
 		- arena (ali_arena)
@@ -71,11 +72,6 @@
 #define ALI_ASSERT assert
 #endif // ALI_ASSERT
 
-#ifndef ALI_MEMCPY
-#include <string.h>
-#define ALI_MEMCPY memcpy
-#endif // ALI_MEMCPY
-
 #ifndef ALI_ABORT
 #include <stdlib.h>
 #define ALI_ABORT abort
@@ -137,6 +133,13 @@ typedef ali_u64 ali_usize;
 typedef ali_i64 ali_isize;
 #endif // ALI_TYPES_
 // @module ali_types end
+
+// @module ali_libc_replace
+
+void* ali_memcpy(void* to, const void* from, ali_usize size);
+char* ali_strchr(char* cstr, char c);
+
+// @module ali_libc_replace end
 
 // @module ali_log
 #ifndef ALI_NO_LOG
@@ -488,7 +491,7 @@ bool ali_rename(char*** cmd, const char* from, const char* to);
 bool ali_remove(char*** cmd, const char* path);
 
 bool ali_create_dir_if_not_exists(const char* path);
-bool ali_create_dir_all_if_not_exists(const char* path);
+bool ali_create_dir_all_if_not_exists(char* path);
 
 #define ali_rebuild_yourself(cmd, argc, argv) do { \
     const char* src = __FILE__; \
@@ -568,6 +571,22 @@ char* ali_shift_args(int* argc, char*** argv) {
 }
 
 // @module ali_util end
+
+// @module ali_libc_replacement
+
+char* ali_strchr(char* cstr, char c) {
+    while (*cstr != c && *cstr != 0) cstr++;
+    return cstr;
+}
+
+void* ali_memcpy(void* to, const void* from, ali_usize size) {
+    for (ali_usize i = 0; i < size; ++i) {
+        ((ali_u8*)to)[i] = ((ali_u8*)from)[i];
+    }
+    return to;
+}
+
+// @module ali_libc_replacement end
 
 // @module ali_log
 #ifndef ALI_NO_LOG
@@ -811,14 +830,14 @@ void* ali_arena_alloc_ex(AliArena* self, ali_usize size, ali_usize alignment) {
 
 void* ali_arena_realloc(AliArena* arena, void* data, ali_usize oldsize, ali_usize newsize) {
     void* copy = ali_arena_alloc(arena, newsize);
-    ALI_MEMCPY(copy, data, oldsize);
+    ali_memcpy(copy, data, oldsize);
     if (arena == NULL) ALI_FREE(data);
     return copy;
 }
 
 void* ali_arena_memdup(AliArena* self, const void* mem, ali_usize size_bytes) {
 	void* data = ali_arena_alloc(self, size_bytes);
-	ALI_MEMCPY(data, mem, size_bytes);
+	ali_memcpy(data, mem, size_bytes);
 	return data;
 }
 
@@ -1023,19 +1042,19 @@ void* ali_temp_alloc(ali_usize size) {
 
 void* ali_temp_memdup(void* data, ali_usize data_size) {
 	void* mem = ali_temp_alloc(data_size);
-	ALI_MEMCPY(mem, data, data_size);
+	ali_memcpy(mem, data, data_size);
 	return mem;
 }
 
 char* ali_temp_strdup(const char* str) {
 	ali_usize size = strlen(str) + 1;
 	char* copy = ali_temp_alloc(size);
-	return ALI_MEMCPY(copy, str, size);
+	return ali_memcpy(copy, str, size);
 }
 
 char* ali_temp_strndup(const char* start, ali_usize count) {
     char* copy = ali_temp_alloc(count + 1);
-    ALI_MEMCPY(copy, start, count);
+    ali_memcpy(copy, start, count);
     copy[count] = 0;
     return copy;
 }
@@ -1066,7 +1085,7 @@ void ali_temp_push(char c) {
 void ali_temp_push_str(const char* str) {
     ali_usize len = strlen(str);
     ALI_ASSERT(ali_temp_buffer_size + len < ALI_TEMP_BUF_SIZE);
-    ALI_MEMCPY(ali_temp_buffer + ali_temp_buffer_size, str, len);
+    ali_memcpy(ali_temp_buffer + ali_temp_buffer_size, str, len);
     ali_temp_buffer_size += len;
 }
 
@@ -1197,7 +1216,7 @@ ali_utf8* ali_codepoints_to_utf8(AliArena* arena, ali_utf8codepoint* codepoints,
 ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, ali_usize* count) {
 	ali_utf8codepoint* codepoints = ali_utf8_to_codepoints(NULL, utf8, count);
 	ali_utf8codepoint* out = ali_temp_alloc(sizeof(*out) * (*count));
-	ALI_MEMCPY(out, codepoints, sizeof(*out) * (*count));
+	ali_memcpy(out, codepoints, sizeof(*out) * (*count));
 	ali_free_codepoints(codepoints);
 	return out;
 }
@@ -1344,7 +1363,7 @@ bool ali_sv_ends_with(AliSv self, AliSv suffix) {
 
 char* ali_temp_sv_to_cstr(AliSv sv) {
 	char* out = ali_temp_alloc(sv.len + 1);
-	ALI_MEMCPY(out, sv.start, sv.len);
+	ali_memcpy(out, sv.start, sv.len);
 	out[sv.len] = 0;
 	return out;
 }
@@ -1371,7 +1390,7 @@ void ali_sb_push_strs_null(AliSb* self, ...) {
 	while (str != NULL) {
 		ali_usize n = strlen(str);
 		ali_sb_maybe_resize(self, n);
-		ALI_MEMCPY(self->data + self->count, str, n);
+		ali_memcpy(self->data + self->count, str, n);
 		self->count += n;
 		str = va_arg(args, const char*);
 	}
@@ -1381,7 +1400,7 @@ void ali_sb_push_strs_null(AliSb* self, ...) {
 
 void ali_sb_push_nstr(AliSb* self, char* start, ali_usize n) {
     ali_sb_maybe_resize(self, n);
-    ALI_MEMCPY(self->data + self->count, start, n);
+    ali_memcpy(self->data + self->count, start, n);
     self->count += n;
 }
 
@@ -1525,7 +1544,7 @@ char* ali_cmd_render(char** cmd) {
         char* arg = cmd[i];
         if (arg == NULL) break;
         if (i > 0) ali_temp_push(' ');
-        if (!strchr(arg, ' ')) {
+        if (!ali_strchr(arg, ' ')) {
             ali_temp_push_str(arg);
         } else {
             ali_temp_push('\'');
@@ -1816,17 +1835,17 @@ bool ali_create_dir_if_not_exists(const char* path) {
     return true;
 }
 
-bool ali_create_dir_all_if_not_exists(const char* path) {
+bool ali_create_dir_all_if_not_exists(char* path) {
     ali_usize stamp = ali_temp_stamp();
 
-    const char* slash = strchr(path, '/');
+    char* slash = ali_strchr(path, '/');
     while (slash != NULL) {
         ali_usize count = slash - path;
         char* dir = ali_temp_strndup(path, count);
         if (strcmp(dir, ".") != 0 && strcmp(dir, "..") != 0) {
             if (!ali_create_dir_if_not_exists(dir)) return false;
         }
-        slash = strchr(slash + 1, '/');
+        slash = ali_strchr(slash + 1, '/');
     }
 
     ali_temp_rewind(stamp);

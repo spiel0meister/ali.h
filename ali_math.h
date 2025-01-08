@@ -108,6 +108,7 @@ ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 #undef ALI_MATH_IMPLEMENTATION
 
 // @module ali_math
+#include <string.h>
 
 AliVector2 ali_vec2_zero(void) {
     return (AliVector2) { 0, 0 };
@@ -292,7 +293,7 @@ ali_u64 ali_xoshiro256pp_next(AliXoshiro256ppState *state) {
 }
 
 void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]) {
-	ALI_MEMCPY(state->state, seed, sizeof(state->state));
+	memcpy(state->state, seed, sizeof(state->state));
 }
 
 ali_u64* ali_temp_rand_sequence(ali_usize count) {
