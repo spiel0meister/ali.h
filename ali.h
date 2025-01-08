@@ -51,6 +51,10 @@
 
 #define ALI_VERSION "0.1.0"
 
+#ifdef _WIN32
+#define ALI_WINDOWS
+#endif // _WIN32
+
 // Customizable functions
 #ifndef ALI_MALLOC
 #include <stdlib.h>
@@ -84,6 +88,8 @@
 
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
+#define ALI_INLINE_ARRAY_WITH_SIZE(Type, ...) (Type[]){ __VA_ARGS__ }, (sizeof((Type[]){ __VA_ARGS__ })/sizeof(Type))
+#define ALI_INLINE_EMPTY_ARRAY_WITH_SIZE(Type) NULL, 0
 
 #define ALI_UNUSED(thing) (void)(thing)
 #define ALI_UNREACHABLE() do { fprintf(stderr, "%s:%d: UNREACABLE\n", __FILE__, __LINE__); ALI_ABORT(); } while (0)
@@ -167,6 +173,8 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...);
 #define ali_logn_error(...) ali_log_logn(LOG_ERROR, __VA_ARGS__)
 
 #else // ALI_LOG_END
+#define ali_log_log(_level, ...) do { printf(__VA_ARGS__); } while (0)
+#define ali_log_logn_va(_level, fmt, args) do { vprintf(fmt, args); printf("\n"); } while (0)
 #define ali_logn_info(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
 #define ali_logn_warn(...) do { printf(__VA_ARGS__); printf("\n"); } while (0)
 #define ali_logn_error(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
@@ -190,16 +198,18 @@ typedef union {
 
 typedef struct {
     const char* name;
+    const char** aliases;
+    ali_usize aliases_count;
     const char* description;
 
     FlagType type;
     FlagAs as;
 }AliFlag;
 
-const char** ali_flag_string(const char* name, const char* desc, const char* default_);
-ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_);
-ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_);
-bool* ali_flag_option(const char* name, const char* desc, bool default_);
+const char** ali_flag_string(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count);
+ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count);
+ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
+bool* ali_flag_option(const char* name, const char* desc, bool default_, const char** aliases, ali_usize aliases_count);
 
 void ali_flag_print_help(FILE* sink);
 ali_isize ali_flag_parse_with_program(int argc, char** argv);
@@ -410,6 +420,9 @@ AliSv ali_sv_chop_by_c(AliSv* self, char c);
 
 bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
 bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
+
+bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
+bool ali_sv_chop_suffix(AliSv* self, AliSv suffix);
 
 bool ali_sv_eq(AliSv left, AliSv right);
 bool ali_sv_starts_with(AliSv self, AliSv prefix);
@@ -652,10 +665,12 @@ AliFlag* ali_flag_push(AliFlag flag) {
      return flag_;
 }
 
-const char** ali_flag_string(const char* name, const char* desc, const char* default_) {
+const char** ali_flag_string(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
+        .aliases = aliases,
+        .aliases_count = aliases_count,
         .type = FLAG_STRING,
         .as.string = default_,
     };
@@ -664,10 +679,12 @@ const char** ali_flag_string(const char* name, const char* desc, const char* def
     return &pushed_flag->as.string;
 }
 
-ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_) {
+ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
+        .aliases = aliases,
+        .aliases_count = aliases_count,
         .type = FLAG_U64,
         .as.num_u64 = default_,
     };
@@ -676,10 +693,12 @@ ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_) {
     return &pushed_flag->as.num_u64;
 }
 
-ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_) {
+ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
+        .aliases = aliases,
+        .aliases_count = aliases_count,
         .type = FLAG_F64,
         .as.num_f64 = default_,
     };
@@ -688,10 +707,12 @@ ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_) {
     return &pushed_flag->as.num_f64;
 }
 
-bool* ali_flag_option(const char* name, const char* desc, bool default_) {
+bool* ali_flag_option(const char* name, const char* desc, bool default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
+        .aliases = aliases,
+        .aliases_count = aliases_count,
         .type = FLAG_OPTION,
         .as.option = default_,
     };
@@ -703,7 +724,16 @@ bool* ali_flag_option(const char* name, const char* desc, bool default_) {
 void ali_flag_print_help(FILE* sink) {
     for (ali_usize i = 0; i < ali_flag_list_size; ++i) {
         AliFlag* flag = &ali_flag_list[i];
-        fprintf(sink, "%s:\n", flag->name);
+        fprintf(sink, "%s ", flag->name);
+        if (ali_flag_list[i].aliases != NULL) {
+            fprintf(sink, "(aliases: ");
+            for (ali_usize j = 0; j < ali_flag_list[i].aliases_count; ++j) {
+                fprintf(sink, "'%s'", ali_flag_list[i].aliases[j]);
+                if (j != ali_flag_list[i].aliases_count - 1) fprintf(sink, ", ");
+            }
+            fprintf(sink, ")");
+        }
+        fprintf(sink, ":\n");
         fprintf(sink, "    %s", flag->description);
         switch (flag->type) {
             case FLAG_STRING:
@@ -735,43 +765,60 @@ while_loop: while (argc > 0) {
         char* arg = ali_shift_args(&argc, &argv);
 
         if (*arg == '-') {
+            bool found = false;
             for (ali_usize j = 0; j < ali_flag_list_size; ++j) {
-                if (strcmp(arg, ali_flag_list[j].name) == 0) {
-                    switch (ali_flag_list[j].type) {
-                        case FLAG_STRING:
-                            if (argc == 0) {
-                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                                return -1;
-                            }
-                            ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
-                            break;
-                        case FLAG_U64: {
-                            if (argc == 0) {
-                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                                return -1;
-                            }
-                            AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
-                            if (!ali_sv_chop_u64(&sv, &ali_flag_list[j].as.num_u64)) return -1;
-                        }break;
-                        case FLAG_F64: {
-                            if (argc == 0) {
-                                ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                                return -1;
-                            }
-                            AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
-                            if (!ali_sv_chop_f64(&sv, &ali_flag_list[j].as.num_f64)) return -1;
-                        }break;
-                        case FLAG_OPTION:
-                            ali_flag_list[j].as.option = true;
-                            break;
+                bool found_ = false;
+                if (strcmp(arg, ali_flag_list[j].name) == 0) found_ |= true;
+                if (ali_flag_list[j].aliases != NULL) {
+                    for (ali_usize k = 0; !found_ && k < ali_flag_list[j].aliases_count; ++k) {
+                        found_ |= strcmp(ali_flag_list[j].aliases[k], arg) == 0;
                     }
-                    goto while_loop;
                 }
+                if (!found_) continue;
+
+                switch (ali_flag_list[j].type) {
+                    case FLAG_STRING:
+                        if (argc == 0) {
+                            ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
+                            return -1;
+                        }
+                        ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
+                        found = true;
+                        break;
+                    case FLAG_U64: {
+                        if (argc == 0) {
+                            ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
+                            return -1;
+                        }
+                        AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
+                        if (!ali_sv_chop_u64(&sv, &ali_flag_list[j].as.num_u64)) return -1;
+                        found = true;
+                    }break;
+                    case FLAG_F64: {
+                        if (argc == 0) {
+                            ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
+                            return -1;
+                        }
+                        AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
+                        if (!ali_sv_chop_f64(&sv, &ali_flag_list[j].as.num_f64)) return -1;
+                        found = true;
+                    }break;
+                    case FLAG_OPTION:
+                        ali_flag_list[j].as.option = true;
+                        found = true;
+                        break;
+                }
+                goto while_loop;
             }
 
             if (strcmp(arg, "-h") == 0) {
                 ali_flag_print_help(stdout);
                 exit(0);
+            }
+
+            if (!found) {
+                ali_logn_error("Unknown flag %s", arg);
+                return -1;
             }
         } else {
             return (ali_isize)argc;
@@ -1361,6 +1408,19 @@ bool ali_sv_ends_with(AliSv self, AliSv suffix) {
 	return ali_sv_eq(ali_sv_from_parts(self.start + self.len - suffix.len, suffix.len), suffix);
 }
 
+bool ali_sv_chop_prefix(AliSv* self, AliSv prefix) {
+    if (!ali_sv_starts_with(*self, prefix)) return false;
+    self->start += prefix.len;
+    self->len -= prefix.len;
+    return true;
+}
+
+bool ali_sv_chop_suffix(AliSv* self, AliSv suffix) {
+    if (!ali_sv_ends_with(*self, suffix)) return false;
+    self->len -= suffix.len;
+    return true;
+}
+
 char* ali_temp_sv_to_cstr(AliSv sv) {
 	char* out = ali_temp_alloc(sv.len + 1);
 	ali_memcpy(out, sv.start, sv.len);
@@ -1544,7 +1604,7 @@ char* ali_cmd_render(char** cmd) {
         char* arg = cmd[i];
         if (arg == NULL) break;
         if (i > 0) ali_temp_push(' ');
-        if (!ali_strchr(arg, ' ')) {
+        if (ali_strchr(arg, ' ') != 0) {
             ali_temp_push_str(arg);
         } else {
             ali_temp_push('\'');
@@ -2071,6 +2131,9 @@ typedef ali_isize isize;
 #define sv_eq ali_sv_eq
 #define sv_starts_with ali_sv_starts_with
 #define sv_ends_with ali_sv_ends_with
+
+#define sv_chop_prefix ali_sv_chop_prefix
+#define sv_chop_suffix ali_sv_chop_suffix
 
 #define temp_sv_to_cstr ali_temp_sv_to_cstr
 // @module ali_sv end
