@@ -863,10 +863,11 @@ void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
 
 void* ali_arena_alloc_ex(AliArena* self, ali_usize size, ali_usize alignment) {
     if (self == NULL) return ALI_MALLOC(size);
-    if (self->region_size == 0) self->region_size = ALI_REGION_DEFAULT_CAP;
+    if (self->region_capacity == 0) self->region_capacity = ALI_REGION_DEFAULT_CAP;
+    ALI_ASSERT(self->region_capacity >= size);
 
 	if (self->start == NULL) {
-		self->start = ali_region_new(self->region_size);
+		self->start = ali_region_new(self->region_capacity);
 		self->end = self->start;
 	}
 
