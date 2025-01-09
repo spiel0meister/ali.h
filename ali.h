@@ -55,6 +55,14 @@
 #define ALI_WINDOWS
 #endif // _WIN32
 
+#ifdef ALI_WINDOWS
+#error "TODO: Windows"
+#else
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#endif // ALI_WINDOWS
+
 // Customizable functions
 #ifndef ALI_MALLOC
 #include <stdlib.h>
@@ -231,6 +239,7 @@ typedef struct AliRegion {
 }AliRegion;
 
 typedef struct {
+    ali_usize region_capacity;
 	AliRegion *start, *end;
 }AliArena;
 
@@ -474,10 +483,6 @@ void ali_print_measurements(void);
 // @module ali_measure end
 
 // @module ali_cmd
-
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
 
 typedef struct {
     ali_u8 redirect_bitmask;
@@ -858,9 +863,10 @@ void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
 
 void* ali_arena_alloc_ex(AliArena* self, ali_usize size, ali_usize alignment) {
     if (self == NULL) return ALI_MALLOC(size);
+    if (self->region_size == 0) self->region_size = ALI_REGION_DEFAULT_CAP;
 
 	if (self->start == NULL) {
-		self->start = ali_region_new(ALI_REGION_DEFAULT_CAP);
+		self->start = ali_region_new(self->region_size);
 		self->end = self->start;
 	}
 
