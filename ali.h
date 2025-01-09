@@ -418,7 +418,12 @@ AliSv ali_sv_chop_left(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_right(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_by_c(AliSv* self, char c);
 
+bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out);
 bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
+
 bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
 
 bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
@@ -1333,7 +1338,39 @@ AliSv ali_sv_chop_by_c(AliSv* self, char c) {
 	return chopped;
 }
 
-bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
+bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    ali_u64 number = 0;
+    while (sv->len > 0 && isdigit(sv->start[0])) {
+        ali_u64 digit = sv->start[0] - '0';
+        if (digit > 1) return false;
+        number <<= 1;
+        number += digit;
+        ali_sv_step(sv);
+    }
+
+    *out = number;
+    return true;
+}
+
+bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    ali_u64 number = 0;
+    while (sv->len > 0 && isdigit(sv->start[0])) {
+        ali_u64 digit = sv->start[0] - '0';
+        if (digit > 7) return false;
+        number *= 8;
+        number += digit;
+        ali_sv_step(sv);
+    }
+
+    *out = number;
+    return true;
+}
+
+bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_u64 number = 0;
@@ -1345,6 +1382,49 @@ bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
 
     *out = number;
     return true;
+}
+
+bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    ali_u64 number = 0;
+    while (sv->len > 0 && isalnum(sv->start[0])) {
+        ali_u64 digit = 0;
+        if (isdigit(sv->start[0])) {
+            digit = sv->start[0] - '0';
+        } else {
+            digit = sv->start[0] & 0x20 ? sv->start[0] - 'a' : sv->start[0] - 'A';
+            digit += 10;
+            if (digit > 15) return false;
+        }
+
+        number *= 16;
+        number += digit;
+        ali_sv_step(sv);
+    }
+
+    *out = number;
+    return true;
+}
+
+bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
+    if (sv->len == 0 || !isdigit(sv->start[0])) return false;
+
+    if (ali_sv_chop_prefix(sv, ali_sv_from_cstr("0b"))) {
+        return ali_sv_chop_u64_bin(sv, out);
+    }
+
+    if (sv->len >= 2 && sv->start[0] == '0' && isdigit(sv->start[1])) {
+        sv->start += 1;
+        sv->len -= 1;
+        return ali_sv_chop_u64_oct(sv, out);
+    }
+
+    if (ali_sv_chop_prefix(sv, ali_sv_from_cstr("0x"))) {
+        return ali_sv_chop_u64_hex(sv, out);
+    }
+
+    return ali_sv_chop_u64_dec(sv, out);
 }
 
 bool ali_sv_chop_f64(AliSv* sv, ali_f64* out) {
@@ -2121,7 +2201,12 @@ typedef ali_isize isize;
 #define sv_chop_right ali_sv_chop_right
 #define sv_chop_by_c ali_sv_chop_by_c
 
+#define sv_chop_u64_bin ali_sv_chop_u64_bin
+#define sv_chop_u64_oct ali_sv_chop_u64_oct
+#define sv_chop_u64_dec ali_sv_chop_u64_dec
+#define sv_chop_u64_hex ali_sv_chop_u64_hex
 #define sv_chop_u64 ali_sv_chop_u64
+
 #define sv_chop_f64 ali_sv_chop_f64
 
 #define sv_chop_long ali_sv_chop_long
