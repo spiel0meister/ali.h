@@ -79,11 +79,6 @@
 #define ALI_FREE free
 #endif // ALI_FREE
 
-#ifndef ALI_ASSERT
-#include <assert.h>
-#define ALI_ASSERT assert
-#endif // ALI_ASSERT
-
 #ifndef ALI_ABORT
 #include <stdlib.h>
 #define ALI_ABORT abort
@@ -92,7 +87,7 @@
 // @module ali_util
 #define ALI_STRINGIFY(x) #x
 #define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
-#define ALI_HERE (__FILE__ ":" ALI_STRINGIFY_2(__LINE__))
+#define ALI_HERE __FILE__ ":" ALI_STRINGIFY_2(__LINE__)
 
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
@@ -152,6 +147,9 @@ typedef ali_i64 ali_isize;
 
 void* ali_memcpy(void* to, const void* from, ali_usize size);
 char* ali_strchr(char* cstr, char c);
+
+void ali__assert(bool ok, const char* expr, const char* loc);
+#define ali_assert(expr) ali__assert(expr, #expr, ALI_HERE)
 
 // @module ali_libc_replace end
 
@@ -331,8 +329,8 @@ void* ali_da_free_with_size(void* da, ali_usize item_size);
 #define ali_da_append_many(da, items, item_count) ali_arena_da_append_many(NULL, da, items, item_count)
 
 #define ali_da_free(da) ((da) = ali_da_free_with_size(da, sizeof(*(da))))
-#define ali_da_remove_unordered(da, i) (ALI_ASSERT(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
-#define ali_da_remove_ordered(da, i) (ALI_ASSERT(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
+#define ali_da_remove_unordered(da, i) (ali_assert(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
+#define ali_da_remove_ordered(da, i) (ali_assert(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
 
 #define ali_da_for(da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
@@ -609,12 +607,19 @@ void* ali_memcpy(void* to, const void* from, ali_usize size) {
     return to;
 }
 
+void ali__assert(bool ok, const char* expr, const char* loc) {
+    if (!ok) {
+        ali_logn_error("[ASSERT] %s: Assertion failed: %s", loc, expr);
+        ALI_ABORT();
+    }
+}
+
 // @module ali_libc_replacement end
 
 // @module ali_log
 #ifndef ALI_NO_LOG
 
-static_assert(LOG_COUNT_ == 3, "Log level was added");
+_Static_assert(LOG_COUNT_ == 3, "Log level was added");
 const char* loglevel_to_str[LOG_COUNT_] = {
 	[LOG_INFO] = "INFO",
 	[LOG_WARN] = "WARN",
@@ -844,7 +849,7 @@ while_loop: while (argc > 0) {
 
 AliRegion* ali_region_new(ali_usize capacity) {
 	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
-	ALI_ASSERT(new != NULL);
+	ali_assert(new != NULL);
 	new->count = 0;
 	new->capacity = capacity;
 	new->next = NULL;
@@ -852,7 +857,7 @@ AliRegion* ali_region_new(ali_usize capacity) {
 }
 
 void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
-    ALI_ASSERT(size < ALI_REGION_DEFAULT_CAP);
+    ali_assert(size < ALI_REGION_DEFAULT_CAP);
 
 	if (self->count + size >= self->capacity) return NULL;
 	self->count += self->count % alignment;
@@ -864,7 +869,7 @@ void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
 void* ali_arena_alloc_ex(AliArena* self, ali_usize size, ali_usize alignment) {
     if (self == NULL) return ALI_MALLOC(size);
     if (self->region_capacity == 0) self->region_capacity = ALI_REGION_DEFAULT_CAP;
-    ALI_ASSERT(self->region_capacity >= size);
+    ali_assert(self->region_capacity >= size);
 
 	if (self->start == NULL) {
 		self->start = ali_region_new(self->region_capacity);
@@ -909,7 +914,7 @@ char* ali_arena_sprintf(AliArena* self, const char* fmt, ...) {
 	va_start(args, fmt);
 
 	char* out;
-	ALI_ASSERT(vasprintf(&out, fmt, args) >= 0);
+	ali_assert(vasprintf(&out, fmt, args) >= 0);
 	char* real_out = ali_arena_strdup(self, out);
 	ALI_FREE(out);
 
@@ -1046,8 +1051,8 @@ AliSlice ali_da_to_slice_with_size(void* da, ali_usize item_size) {
 }
 
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size) {
-    ALI_ASSERT(start < ali_da_getlen(da));
-    ALI_ASSERT(end_exclusive <= ali_da_getlen(da));
+    ali_assert(start < ali_da_getlen(da));
+    ali_assert(end_exclusive <= ali_da_getlen(da));
 
     AliSlice slice = {
         .count = end_exclusive - start,
@@ -1058,8 +1063,8 @@ AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusi
 }
 
 AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive) {
-    ALI_ASSERT(start < strlen(str));
-    ALI_ASSERT(end_exclusive <= strlen(str));
+    ali_assert(start < strlen(str));
+    ali_assert(end_exclusive <= strlen(str));
 
     AliSlice slice = {
         .item_size = 1,
@@ -1070,8 +1075,8 @@ AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive) {
 }
 
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive) {
-    ALI_ASSERT(start < slice.count);
-    ALI_ASSERT(end_exclusive <= slice.count);
+    ali_assert(start < slice.count);
+    ali_assert(end_exclusive <= slice.count);
 
     AliSlice slice_ = {
         .count = end_exclusive - start,
@@ -1093,7 +1098,7 @@ static ali_u8 ali_temp_buffer[ALI_TEMP_BUF_SIZE] = {0};
 static ali_usize ali_temp_buffer_size = 0;
 
 void* ali_temp_alloc(ali_usize size) {
-	ALI_ASSERT(ali_temp_buffer_size + size < ALI_TEMP_BUF_SIZE);
+	ali_assert(ali_temp_buffer_size + size < ALI_TEMP_BUF_SIZE);
 	void* ptr = ali_temp_buffer + ali_temp_buffer_size;
 	ali_temp_buffer_size += size;
 	return ptr;
@@ -1137,13 +1142,13 @@ void* ali_temp_get_cur() {
 }
 
 void ali_temp_push(char c) {
-    ALI_ASSERT(ali_temp_buffer_size < ALI_TEMP_BUF_SIZE);
+    ali_assert(ali_temp_buffer_size < ALI_TEMP_BUF_SIZE);
     ali_temp_buffer[ali_temp_buffer_size++] = c;
 }
 
 void ali_temp_push_str(const char* str) {
     ali_usize len = strlen(str);
-    ALI_ASSERT(ali_temp_buffer_size + len < ALI_TEMP_BUF_SIZE);
+    ali_assert(ali_temp_buffer_size + len < ALI_TEMP_BUF_SIZE);
     ali_memcpy(ali_temp_buffer + ali_temp_buffer_size, str, len);
     ali_temp_buffer_size += len;
 }
@@ -1556,7 +1561,7 @@ void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...) {
 	va_start(args, fmt);
 
 	char* str;
-	ALI_ASSERT(vasprintf(&str, fmt, args) == 0);
+	ali_assert(vasprintf(&str, fmt, args) == 0);
 	ali_sb_push_strs(self, str);
 	ALI_FREE(str);
 
@@ -1608,7 +1613,7 @@ bool ali_sb_write_file(AliSb* self, const char* path) {
 
 double ali_get_now() {
 	struct timespec ts;
-	ALI_ASSERT(clock_gettime(CLOCK_REALTIME, &ts) == 0);
+	ali_assert(clock_gettime(CLOCK_REALTIME, &ts) == 0);
 	return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
 
@@ -1625,7 +1630,7 @@ static Measurement measurements[ALI_MEASUREMENTS_COUNT] = {0};
 static ali_usize measurements_count = 0;
 
 void ali_measurement_push(Measurement measurement) {
-	ALI_ASSERT(measurements_count < ALI_MEASUREMENTS_COUNT);
+	ali_assert(measurements_count < ALI_MEASUREMENTS_COUNT);
 	measurements[measurements_count++] = measurement;
 }
 
@@ -1655,7 +1660,7 @@ void ali_measure_start(const char* name) {
 
 void ali_measure_end(const char* name) {
 	Measurement* found = ali_find_measurement(name);
-	ALI_ASSERT(found != NULL);
+	ali_assert(found != NULL);
 
 	found->total += ali_get_now() - found->start;
 	found->count += 1;
@@ -2018,7 +2023,6 @@ bool ali_create_dir_all_if_not_exists(char* path) {
 #define ARRAY_LEN ALI_ARRAY_LEN
 #define INLINE_ARRAY ALI_INLINE_ARRAY
 
-#define ASSERT ALI_ASSERT
 #define UNUSED ALI_UNUSED
 #define UNREACHABLE ALI_UNREACHABLE
 #define TODO ALI_TODO
