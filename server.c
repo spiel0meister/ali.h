@@ -17,21 +17,19 @@ int main(void) {
 
     char buffer[1024];
     do {
-        isize n = read(clientfd, buffer, sizeof(buffer));
-        if (n == 0) {
-            logn_info("Recieved nothing from client");
-            break;
-        }
+        isize n = recv(clientfd, buffer, sizeof(buffer), 0);
+        if (n == 0) break;
         if (n < 0) {
             logn_error("Couldn't read from client: %s", strerror(errno));
             break;
         }
+
         logn_info("Recieved %ld bytes", n);
+        buffer[n] = 0;
         logn_info("%s", buffer);
     } while (true);
 
     close(clientfd);
-
     close(sockfd);
     return 0;
 }
