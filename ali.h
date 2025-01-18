@@ -1055,14 +1055,39 @@ AliBump ali_bump_from_buffer(void* buffer, ali_usize buffer_size) {
     };
 }
 
-void* ali_bump_alloc_ex(AliBump* bump, ali_usize size, ali_usize alignment) {
-    ali_assert(bump != NULL);
-    ali_assert(bump->size + size <= bump->capacity);
+void* ali_bump_alloc(void* data, ali_usize size, ali_usize alignment) {
+    AliBump* bump = (AliBump*)data;
 
-    bump->size += (bump->size % alignment);
+    ali_assert(bump->size + size <= bump->capacity);
+    bump->size += bump->size % alignment;
     void* ptr = bump->buffer + bump->size;
     bump->size += size;
     return ptr;
+}
+
+void* ali_bump_realloc(void* data, void* ptr, ali_usize old_size, ali_usize new_size, ali_usize alignment) {
+    AliBump* bump = (AliBump*)data;
+
+    ali_assert(bump->size + new_size <= bump->capacity);
+    bump->size += bump->size % alignment;
+    void* realloced = bump->buffer + bump->size;
+    bump->size += new_size;
+    ali_memcpy(realloced, ptr, old_size);
+    return ptr;
+}
+
+void ali_bump_free(void* data, void* ptr) {
+    ALI_UNUSED(data);
+    ALI_UNUSED(ptr);
+}
+
+AliAllocator ali_bump_allocator(AliBump* bump) {
+    return (AliAllocator) {
+        .alloc = ali_bump_alloc,
+        .realloc = ali_bump_realloc,
+        .free = ali_bump_free,
+        .data = bump,
+    };
 }
 
 // @module ali_bump end
