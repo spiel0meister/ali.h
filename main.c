@@ -14,16 +14,6 @@
 #include "ali_net.h"
 
 int main(int argc, char** argv) {
-    char* path = "/home/overlord/dev/ali/main.c";
-
-    char* slash = ali_strchr(path, '/');
-    while (*slash != 0) {
-        logn_info("%.*s", (int)(slash - path), path);
-        path = slash + 1;
-        slash = ali_strchr(path, '/');
-    }
-    logn_info("%s", path);
-
     return 0;
 }
 

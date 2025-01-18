@@ -223,6 +223,20 @@ ali_isize ali_flag_parse(int argc, char** argv);
 
 // @module ali_flag end
 
+// @module ali_bump
+
+typedef struct {
+    void* buffer;
+    size_t size;
+    size_t capacity;
+}AliBump;
+
+AliBump ali_bump_from_buffer(void* buffer, ali_usize buffer_size);
+void* ali_bump_alloc_ex(AliBump* bump, ali_usize size, ali_usize alignment);
+#define ali_bump_alloc(bump, size) ali_bump_alloc_ex(bump, size, 8)
+
+// @module ali_bump end
+
 // @module ali_arena 
 #ifndef ALI_REGION_DEFAULT_CAP
 #define ALI_REGION_DEFAULT_CAP (4 << 10)
@@ -957,6 +971,28 @@ void ali_arena_rollback(AliArena* self, AliArenaMark mark) {
 }
 
 // @module ali_arena end
+
+// @module ali_bump
+
+AliBump ali_bump_from_buffer(void* buffer, ali_usize buffer_size) {
+    return (AliBump) {
+        .buffer = buffer,
+        .size = 0,
+        .capacity = buffer_size,
+    };
+}
+
+void* ali_bump_alloc_ex(AliBump* bump, ali_usize size, ali_usize alignment) {
+    ali_assert(bump != NULL);
+    ali_assert(bump->size + size <= bump->capacity);
+
+    bump->size += (bump->size % alignment);
+    void* ptr = bump->buffer + bump->size;
+    bump->size += size;
+    return ptr;
+}
+
+// @module ali_bump end
 
 // @module ali_testing
 
@@ -2150,6 +2186,13 @@ typedef ali_isize isize;
 #define temp_reset ali_temp_reset
 
 // @module ali_temp_alloc end
+
+// @module ali_bump
+
+#define bump_alloc_ex ali_bump_alloc_ex
+#define bump_alloc ali_bump_alloc
+
+// @module ali_bump end
 
 // @module ali_arena
 #define region_new ali_region_new
