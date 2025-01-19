@@ -2222,18 +2222,10 @@ typedef ali_isize isize;
 // @module ali_flag end
 
 // @module ali_da
-#define arena_da_new_header ali_arena_ali_da_new_header
-#define arena_da_get_header ali_arena_ali_da_get_header
-#define arena_da_maybe_resize ali_arena_ali_da_maybe_resize
-
 #define da_new_header ali_da_new_header
 #define da_get_header ali_da_get_header
 #define da_maybe_resize ali_da_maybe_resize
 #define da_getlen ali_da_getlen
-
-#define arena_da_append ali_arena_da_append
-#define arena_da_shallow_append ali_arena_da_shallow_append
-#define arena_da_append_many ali_arena_da_append_many
 
 #define da_append ali_da_append
 #define da_shallow_append ali_da_shallow_append
