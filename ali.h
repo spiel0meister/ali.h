@@ -336,19 +336,23 @@ AliDaHeader* ali_da_get_header_with_size(AliAllocator allocator, void* da, ali_u
 void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size);
 void* ali_da_free_with_size(AliAllocator allocator, void* da, ali_usize item_size);
 
-#define ali_da_get_header(allocator, da) ali_da_get_header_with_size(allocator, da, sizeof(*(da)))
-#define ali_da_maybe_resize(allocator, da, to_add) ((da) = ali_da_maybe_resize_with_size(allocator, da, to_add, sizeof(*(da))))
+#define ali_da_get_header_ex(allocator, da) ali_da_get_header_with_size(allocator, da, sizeof(*(da)))
+#define ali_da_maybe_resize_ex(allocator, da, to_add) ((da) = ali_da_maybe_resize_with_size(allocator, da, to_add, sizeof(*(da))))
 
-#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(ali_libc_allocator, da)->count)
-#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(ali_libc_allocator, da)->count = 0; }
+#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header_ex(ali_libc_allocator, da)->count)
+#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header_ex(ali_libc_allocator, da)->count = 0; }
 
-#define ali_da_append(allocator, da, item) (ali_da_maybe_resize(allocator, da, 1), (da)[ali_da_get_header(allocator, da)->count++] = item)
-#define ali_da_shallow_append(allocator, da, item) (ali_da_maybe_resize(allocator, da, 1), (da)[ali_da_get_header(allocator, da)->count] = item)
-#define ali_da_append_many(allocator, da, items, item_count) do { \
+#define ali_da_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header_ex(allocator, da)->count++] = item)
+#define ali_da_shallow_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header_ex(allocator, da)->count] = item)
+#define ali_da_append_many_ex(allocator, da, items, item_count) do { \
     ali_da_maybe_resize(arena, da, 1); \
     memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
     ali_da_get_header(da)->count += item_count; \
 } while (0)
+
+#define ali_da_append(da, item) ali_da_append_ex(ali_libc_allocator, da, item)
+#define ali_da_shallow_append(da, item) ali_da_shallow_append_ex(ali_libc_allocator, da, item)
+#define ali_da_append_many(da, items, item_count) ali_da_append_many_ex(ali_libc_allocator, da, items, item_count)
 
 #define ali_da_free(allocator, da) ((da) = ali_da_free_with_size(allocator, da, sizeof(*(da))))
 #define ali_da_remove_unordered(da, i) (ali_assert(i >= 0), (da)[i] = (da)[--ali_da_get_header(ali_libc_allocator, da)->count])
@@ -510,8 +514,8 @@ typedef struct {
 #define ALI_REDIRECT_STDOUT (1 << 1)
 #define ALI_REDIRECT_STDERR (1 << 2)
 
-#define ali_cmd_append_arg(cmd, arg) ali_da_append(ali_libc_allocator, cmd, arg)
-#define ali_cmd_shallow_append_arg(cmd, arg) ali_da_shallow_append(ali_libc_allocator, cmd, arg)
+#define ali_cmd_append_arg ali_da_append
+#define ali_cmd_shallow_append_arg ali_da_shallow_append
 
 void ali_cmd_append_args_(char*** cmd, ...);
 #define ali_cmd_append_args(...) ali_cmd_append_args_(__VA_ARGS__, NULL)
@@ -1919,7 +1923,7 @@ bool ali_cmd_run_sync(char** cmd) {
 
 bool ali_cmd_run_sync_and_reset(char** cmd) {
     bool ret = ali_cmd_run_sync(cmd);
-    ali_da_get_header(ali_libc_allocator, cmd)->count = 0;
+    ali_da_get_header_ex(ali_libc_allocator, cmd)->count = 0;
     return ret;
 }
 
@@ -1958,7 +1962,7 @@ void ali_c_builder_add_srcs_(AliCBuilder* builder, ...) {
     do {
         src = va_arg(args, char*);
         if (src != NULL) {
-            ali_da_append(builder->allocator, builder->srcs, src);
+            ali_da_append_ex(builder->allocator, builder->srcs, src);
         }
     } while (src != NULL);
 
@@ -1973,7 +1977,7 @@ void ali_c_builder_add_libs_(AliCBuilder* builder, ...) {
     do {
         lib = va_arg(args, char*);
         if (lib != NULL) {
-            ali_da_append(builder->allocator, builder->libs, lib);
+            ali_da_append_ex(builder->allocator, builder->libs, lib);
         }
     } while (lib != NULL);
 
@@ -1988,7 +1992,7 @@ void ali_c_builder_add_flags_(AliCBuilder* builder, ...) {
     do {
         flag = va_arg(args, char*);
         if (flag != NULL) {
-            ali_da_append(builder->allocator, builder->cflags, flag);
+            ali_da_append_ex(builder->allocator, builder->cflags, flag);
         }
     } while (flag != NULL);
 
@@ -2011,7 +2015,7 @@ void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliAllocato
     builder->allocator = allocator;
     builder->type = type;
     builder->target = target;
-    ali_da_append(builder->allocator, builder->srcs, src);
+    ali_da_append_ex(builder->allocator, builder->srcs, src);
 }
 
 bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
@@ -2075,20 +2079,20 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
 }
 
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
-    ali_usize count = ali_da_get_header(builder->allocator, builder->subbuilders)->count;
-    ali_da_maybe_resize(builder->allocator, builder->subbuilders, 1);
-    ali_da_get_header(builder->allocator, builder->subbuilders)->count++;
+    ali_usize count = ali_da_get_header_ex(builder->allocator, builder->subbuilders)->count;
+    ali_da_maybe_resize_ex(builder->allocator, builder->subbuilders, 1);
+    ali_da_get_header_ex(builder->allocator, builder->subbuilders)->count++;
     return &builder->subbuilders[count];
 }
 
 bool ali_rename(char*** cmd, const char* from, const char* to) {
-    ali_da_get_header(ali_libc_allocator, *cmd)->count = 0;
+    ali_da_get_header_ex(ali_libc_allocator, *cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
 
 bool ali_remove(char*** cmd, const char* path) {
-    ali_da_get_header(ali_libc_allocator, *cmd)->count = 0;
+    ali_da_get_header_ex(ali_libc_allocator, *cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
