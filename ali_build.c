@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     }
 
     if (sv_eq(sv_from_cstr(subcommand), sv_from_cstr("build"))) {
-        bool* force = flag_option("-f", "Should force building?", false);
+        bool* force = flag_option("-f", "Should force building?", false, 0, 0);
         argc = flag_parse(argc, argv);
 
         AliCBuilder builder = {0};
