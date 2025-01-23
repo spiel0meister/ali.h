@@ -332,18 +332,18 @@ typedef struct {
 }AliDaHeader;
 
 AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
-AliDaHeader* ali_da_get_header_with_size(AliAllocator allocator, void* da, ali_usize item_size);
+AliDaHeader* ali_da_get_header_with_size(void* da);
 void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size);
-void* ali_da_free_with_size(AliAllocator allocator, void* da, ali_usize item_size);
+void* ali_da_free_with_size(AliAllocator allocator, void* da);
 
-#define ali_da_get_header_ex(allocator, da) ali_da_get_header_with_size(allocator, da, sizeof(*(da)))
+#define ali_da_get_header(da) ali_da_get_header_with_size(da)
 #define ali_da_maybe_resize_ex(allocator, da, to_add) ((da) = ali_da_maybe_resize_with_size(allocator, da, to_add, sizeof(*(da))))
 
-#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header_ex(ali_libc_allocator, da)->count)
-#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header_ex(ali_libc_allocator, da)->count = 0; }
+#define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
+#define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(da)->count = 0; }
 
-#define ali_da_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header_ex(allocator, da)->count++] = item)
-#define ali_da_shallow_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header_ex(allocator, da)->count] = item)
+#define ali_da_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header(da)->count++] = item)
+#define ali_da_shallow_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header(da)->count] = item)
 #define ali_da_append_many_ex(allocator, da, items, item_count) do { \
     ali_da_maybe_resize(arena, da, 1); \
     memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
@@ -354,9 +354,9 @@ void* ali_da_free_with_size(AliAllocator allocator, void* da, ali_usize item_siz
 #define ali_da_shallow_append(da, item) ali_da_shallow_append_ex(ali_libc_allocator, da, item)
 #define ali_da_append_many(da, items, item_count) ali_da_append_many_ex(ali_libc_allocator, da, items, item_count)
 
-#define ali_da_free(allocator, da) ((da) = ali_da_free_with_size(allocator, da, sizeof(*(da))))
-#define ali_da_remove_unordered(da, i) (ali_assert(i >= 0), (da)[i] = (da)[--ali_da_get_header(ali_libc_allocator, da)->count])
-#define ali_da_remove_ordered(da, i) (ali_assert(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(ali_libc_allocator, da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(ali_libc_allocator, da)->count--)
+#define ali_da_free(allocator, da) ((da) = ali_da_free_with_size(allocator, da))
+#define ali_da_remove_unordered(da, i) (ali_assert(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
+#define ali_da_remove_ordered(da, i) (ali_assert(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(ali_libc_allocator, da)->count--)
 
 #define ali_da_for(da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
@@ -1131,14 +1131,14 @@ AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_
 	return h;
 }
 
-AliDaHeader* ali_da_get_header_with_size(AliAllocator allocator, void* da, ali_usize item_size) {
-	if (da == NULL) return ali_da_new_header_with_size(allocator, ALI_DA_DEFAULT_INIT_CAPACITY, item_size);
-	
+AliDaHeader* ali_da_get_header_with_size(void* da) {
+    ali_assert(da != NULL);
 	return (AliDaHeader*)da - 1;
 }
 
 void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size) {
-    AliDaHeader* h = ali_da_get_header_with_size(allocator, da, item_size);
+    if (da == NULL) return ali_da_new_header_with_size(allocator, ALI_DA_DEFAULT_INIT_CAPACITY, item_size)->data;
+    AliDaHeader* h = ali_da_get_header_with_size(da);
 
     if (h->count + to_add >= h->capacity) {
         ali_usize old_capacity = h->capacity;
@@ -1151,8 +1151,8 @@ void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize 
     return h->data;
 }
 
-void* ali_da_free_with_size(AliAllocator allocator, void* da, ali_usize item_size) {
-	AliDaHeader* h = ali_da_get_header_with_size(allocator, da, item_size);
+void* ali_da_free_with_size(AliAllocator allocator, void* da) {
+	AliDaHeader* h = ali_da_get_header_with_size(da);
 	ali_free(allocator, h);
 	return (da = NULL);
 }
@@ -1923,7 +1923,7 @@ bool ali_cmd_run_sync(char** cmd) {
 
 bool ali_cmd_run_sync_and_reset(char** cmd) {
     bool ret = ali_cmd_run_sync(cmd);
-    ali_da_get_header_ex(ali_libc_allocator, cmd)->count = 0;
+    ali_da_get_header(cmd)->count = 0;
     return ret;
 }
 
@@ -2079,20 +2079,20 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
 }
 
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
-    ali_usize count = ali_da_get_header_ex(builder->allocator, builder->subbuilders)->count;
+    ali_usize count = ali_da_get_header(builder->subbuilders)->count;
     ali_da_maybe_resize_ex(builder->allocator, builder->subbuilders, 1);
-    ali_da_get_header_ex(builder->allocator, builder->subbuilders)->count++;
+    ali_da_get_header(builder->subbuilders)->count++;
     return &builder->subbuilders[count];
 }
 
 bool ali_rename(char*** cmd, const char* from, const char* to) {
-    ali_da_get_header_ex(ali_libc_allocator, *cmd)->count = 0;
+    ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
 
 bool ali_remove(char*** cmd, const char* path) {
-    ali_da_get_header_ex(ali_libc_allocator, *cmd)->count = 0;
+    ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
