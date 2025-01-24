@@ -2305,7 +2305,6 @@ typedef ali_isize isize;
 // @module ali_testing end
 
 // @module ali_utf8
-// NOTE: we mustn't do this
 typedef ali_utf8 utf8;
 typedef ali_utf8codepoint utf8codepoint;
 
