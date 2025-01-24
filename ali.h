@@ -2306,8 +2306,8 @@ typedef ali_isize isize;
 
 // @module ali_utf8
 // NOTE: we mustn't do this
-// #define utf8 ali_utf8
-#define utf8codepoint ali_utf8codepoint
+typedef ali_utf8 utf8;
+typedef ali_utf8codepoint utf8codepoint;
 
 #define UTF8 ALI_UTF8
 
