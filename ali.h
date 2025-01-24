@@ -2142,7 +2142,8 @@ bool ali_create_dir_all_if_not_exists(char* path) {
 #endif // ALI_IMPLEMENTATION
 
 #ifdef ALI_REMOVE_PREFIX
-#undef ALI_REMOVE_PREFIX
+#ifndef ALI_REMOVE_PREFIX_GUARD_
+#define ALI_REMOVE_PREFIX_GUARD_
 
 // @module ali_util
 #define STRINGIFY ALI_STRINGIFY
@@ -2408,6 +2409,7 @@ typedef ali_utf8codepoint utf8codepoint;
 
 // @module ali_cmd end
 
+#endif ALI_REMOVE_PREFIX_GUARD_
 #endif // ALI_REMOVE_PREFIX
 
 #ifdef ALI_INTERNAL_TESTING

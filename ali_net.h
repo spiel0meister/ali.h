@@ -148,6 +148,8 @@ defer:
 #endif // ALI_IMPLEMENTATION
 
 #ifdef ALI_NET_REMOVE_PREFIX
+#ifndef ALI_NET_REMOVE_PREFIX_GUARD_
+#define ALI_NET_REMOVE_PREFIX_GUARD_
 
 #define logn_info ali_logn_info
 #define logn_warn ali_logn_warn
@@ -182,4 +184,5 @@ typedef ali_isize isize;
 
 #define tcp_client_connect ali_tcp_client_connect
 
+#endif // ALI_NET_REMOVE_PREFIX_GUARD_
 #endif // ALI_NET_REMOVE_PREFIX

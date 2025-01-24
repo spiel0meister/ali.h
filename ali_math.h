@@ -321,7 +321,8 @@ ali_u64 ali_rand() {
 #endif // ALI_MATH_IMPLEMENTATION
 
 #ifdef ALI_MATH_REMOVE_PREFIX
-#undef ALI_MATH_REMOVE_PREFIX
+#ifndef ALI_MATH_REMOVE_PREFIX_GUARD_
+#define ALI_MATH_REMOVE_PREFIX_GUARD_
 
 #ifndef ALI_TYPES_
 #ifndef ALI_TYPES_ALIASES_
@@ -375,4 +376,5 @@ typedef ali_isize isize;
 // #define rotl64 ali_rotl64
 // #define quadbezierf ali_quadbezierf
 // #define cubebezierf ali_cubebezierf
+#endif // ALI_MATH_REMOVE_PREFIX_GUARD_
 #endif // ALI_MATH_REMOVE_PREFIX
