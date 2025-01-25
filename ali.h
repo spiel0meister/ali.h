@@ -219,9 +219,10 @@ ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, cons
 ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
 bool* ali_flag_option(const char* name, const char* desc, bool default_, const char** aliases, ali_usize aliases_count);
 
-void ali_flag_print_help(FILE* sink);
-ali_isize ali_flag_parse_with_program(int argc, char** argv);
-ali_isize ali_flag_parse(int argc, char** argv);
+void ali_flag_reset(void);
+
+void ali_flag_print_help(FILE* sink, const char* program);
+bool ali_flag_parse(int* argc, char*** argv, const char* program);
 
 // @module ali_flag end
 
@@ -695,10 +696,17 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
 // @module ali_flag
 #define ALI_FLAG_LIST_MAX_SIZE 128
 AliFlag ali_flag_list[ALI_FLAG_LIST_MAX_SIZE] = {0};
+ali_usize ali_flag_list_start = 0;
 ali_usize ali_flag_list_size = 0;
 
+void ali_flag_reset(void) {
+    ali_flag_list_start = ali_flag_list_size;
+    ali_flag_list_size = 0;
+}
+
 AliFlag* ali_flag_push(AliFlag flag) {
-     AliFlag* flag_ = &ali_flag_list[ali_flag_list_size++];
+     ali_assert(ali_flag_list_start + ali_flag_list_size < ALI_FLAG_LIST_MAX_SIZE);
+     AliFlag* flag_ = &ali_flag_list[ali_flag_list_start + ali_flag_list_size++];
      *flag_ = flag;
      return flag_;
 }
@@ -759,8 +767,11 @@ bool* ali_flag_option(const char* name, const char* desc, bool default_, const c
     return &pushed_flag->as.option;
 }
 
-void ali_flag_print_help(FILE* sink) {
-    for (ali_usize i = 0; i < ali_flag_list_size; ++i) {
+void ali_flag_print_help(FILE* sink, const char* program) {
+    fprintf(sink, "%s [OPTIONS]\n", program);
+    fprintf(sink, "Options:\n");
+
+    for (ali_usize i = ali_flag_list_start; i < ali_flag_list_start + ali_flag_list_size; ++i) {
         AliFlag* flag = &ali_flag_list[i];
         fprintf(sink, "%s ", flag->name);
         if (ali_flag_list[i].aliases != NULL) {
@@ -792,19 +803,13 @@ void ali_flag_print_help(FILE* sink) {
     }
 }
 
-ali_isize ali_flag_parse_with_program(int argc, char** argv) {
-    char* program = ali_shift_args(&argc, &argv);
-    ALI_UNUSED(program);
-    return ali_flag_parse(argc, argv);
-}
-
-ali_isize ali_flag_parse(int argc, char** argv) {
-while_loop: while (argc > 0) {
-        char* arg = ali_shift_args(&argc, &argv);
+bool ali_flag_parse(int* argc, char*** argv, const char* program) {
+while_loop: while (*argc > 0) {
+        char* arg = ali_shift_args(argc, argv);
 
         if (*arg == '-') {
             bool found = false;
-            for (ali_usize j = 0; j < ali_flag_list_size; ++j) {
+            for (ali_usize j = ali_flag_list_start; j < ali_flag_list_start + ali_flag_list_size; ++j) {
                 bool found_ = false;
                 if (strcmp(arg, ali_flag_list[j].name) == 0) found_ |= true;
                 if (ali_flag_list[j].aliases != NULL) {
@@ -818,27 +823,27 @@ while_loop: while (argc > 0) {
                     case FLAG_STRING:
                         if (argc == 0) {
                             ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                            return -1;
+                            return false;
                         }
-                        ali_flag_list[j].as.string = ali_shift_args(&argc, &argv);
+                        ali_flag_list[j].as.string = ali_shift_args(argc, argv);
                         found = true;
                         break;
                     case FLAG_U64: {
                         if (argc == 0) {
                             ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                            return -1;
+                            return false;
                         }
-                        AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
-                        if (!ali_sv_chop_u64(&sv, &ali_flag_list[j].as.num_u64)) return -1;
+                        AliSv sv = ali_sv_from_cstr(ali_shift_args(argc, argv));
+                        if (!ali_sv_chop_u64(&sv, &ali_flag_list[j].as.num_u64)) return false;
                         found = true;
                     }break;
                     case FLAG_F64: {
                         if (argc == 0) {
                             ali_logn_error("%s requires an arguement", ali_flag_list[j].name);
-                            return -1;
+                            return false;
                         }
-                        AliSv sv = ali_sv_from_cstr(ali_shift_args(&argc, &argv));
-                        if (!ali_sv_chop_f64(&sv, &ali_flag_list[j].as.num_f64)) return -1;
+                        AliSv sv = ali_sv_from_cstr(ali_shift_args(argc, argv));
+                        if (!ali_sv_chop_f64(&sv, &ali_flag_list[j].as.num_f64)) return false;
                         found = true;
                     }break;
                     case FLAG_OPTION:
@@ -850,20 +855,20 @@ while_loop: while (argc > 0) {
             }
 
             if (strcmp(arg, "-h") == 0) {
-                ali_flag_print_help(stdout);
+                ali_flag_print_help(stdout, program);
                 exit(0);
             }
 
             if (!found) {
                 ali_logn_error("Unknown flag %s", arg);
-                return -1;
+                return false;
             }
         } else {
-            return (ali_isize)argc;
+            return true;
         }
     }
 
-    return (ali_isize)argc;
+    return true;
 }
 
 // @module ali_flag end
@@ -1152,8 +1157,10 @@ void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize 
 }
 
 void* ali_da_free_with_size(AliAllocator allocator, void* da) {
-	AliDaHeader* h = ali_da_get_header_with_size(da);
-	ali_free(allocator, h);
+    if (da != NULL) {
+        AliDaHeader* h = ali_da_get_header_with_size(da);
+        ali_free(allocator, h);
+    }
 	return (da = NULL);
 }
 
@@ -2409,7 +2416,7 @@ typedef ali_utf8codepoint utf8codepoint;
 
 // @module ali_cmd end
 
-#endif ALI_REMOVE_PREFIX_GUARD_
+#endif // ALI_REMOVE_PREFIX_GUARD_
 #endif // ALI_REMOVE_PREFIX
 
 #ifdef ALI_INTERNAL_TESTING
