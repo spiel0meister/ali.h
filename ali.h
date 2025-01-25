@@ -48,7 +48,6 @@
 
 #ifndef ALI_H_
 #define ALI_H_
-#include <stdbool.h>
 #include <stdio.h>
 
 #define ALI_VERSION "0.1.0"
@@ -87,6 +86,13 @@
 #endif // ALI_ABORT
 
 // @module ali_util
+typedef enum {
+    ali_false = 0,
+    ali_true = 1,
+}ali_bool;
+#define false ali_false
+#define true ali_true
+
 #define ALI_STRINGIFY(x) #x
 #define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
 #define ALI_HERE __FILE__ ":" ALI_STRINGIFY_2(__LINE__)
@@ -150,7 +156,7 @@ typedef ali_i64 ali_isize;
 void* ali_memcpy(void* to, const void* from, ali_usize size);
 char* ali_strchr(char* cstr, char c);
 
-void ali__assert(bool ok, const char* expr, const char* loc);
+void ali__assert(ali_bool ok, const char* expr, const char* loc);
 #define ali_assert(expr) ali__assert(expr, #expr, ALI_HERE)
 
 // @module ali_libc_replace end
@@ -201,7 +207,7 @@ typedef union {
     const char* string;
     ali_u64 num_u64;
     ali_f64 num_f64;
-    bool option;
+    ali_bool option;
 }FlagAs;
 
 typedef struct {
@@ -217,12 +223,12 @@ typedef struct {
 const char** ali_flag_string(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count);
 ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count);
 ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
-bool* ali_flag_option(const char* name, const char* desc, bool default_, const char** aliases, ali_usize aliases_count);
+ali_bool* ali_flag_option(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count);
 
 void ali_flag_reset(void);
 
 void ali_flag_print_help(FILE* sink, const char* program);
-bool ali_flag_parse(int* argc, char*** argv, const char* program);
+ali_bool ali_flag_parse(int* argc, char*** argv, const char* program);
 
 // @module ali_flag end
 
@@ -312,7 +318,7 @@ typedef void (*ali_test_t)(AliTesting* t);
 void ali_testing_run(AliTesting* t, ali_test_t test);
 void ali_testing_print(AliTesting* t);
 void ali_testing__fail(AliTesting* t, const char* file, int line, const char* func);
-bool ali_testing__expect(AliTesting* t, bool ok, const char* file, int line, const char* func, const char* fmt, ...);
+ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int line, const char* func, const char* fmt, ...);
 
 #define ali_testing_fail(t) ali_testing__fail(t, __FILE__, __LINE__, __func__)
 #define ali_testing_expect(t, ok, ...) ali_testing__expect(t, ok, __FILE__, __LINE__, __func__, __VA_ARGS__)
@@ -385,20 +391,20 @@ AliSv ali_sv_chop_left(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_right(AliSv* self, ali_usize n);
 AliSv ali_sv_chop_by_c(AliSv* self, char c);
 
-bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
+ali_bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out);
+ali_bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out);
+ali_bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out);
+ali_bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out);
+ali_bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
 
-bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
+ali_bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
 
-bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
-bool ali_sv_chop_suffix(AliSv* self, AliSv suffix);
+ali_bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
+ali_bool ali_sv_chop_suffix(AliSv* self, AliSv suffix);
 
-bool ali_sv_eq(AliSv left, AliSv right);
-bool ali_sv_starts_with(AliSv self, AliSv prefix);
-bool ali_sv_ends_with(AliSv self, AliSv suffix);
+ali_bool ali_sv_eq(AliSv left, AliSv right);
+ali_bool ali_sv_starts_with(AliSv self, AliSv prefix);
+ali_bool ali_sv_ends_with(AliSv self, AliSv suffix);
 
 char* ali_temp_sv_to_cstr(AliSv sv);
 
@@ -461,7 +467,7 @@ ali_usize ali_utf8len(const ali_utf8* utf8);
 ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, ali_usize* codepoint_size);
 ali_utf8codepoint* ali_utf8_to_codepoints(AliAllocator allocator, const ali_utf8* utf8, ali_usize* count);
 
-bool ali_is_codepoint_valid(ali_utf8codepoint codepoint);
+ali_bool ali_is_codepoint_valid(ali_utf8codepoint codepoint);
 ali_usize ali_codepoint_size(ali_utf8codepoint codepoint);
 const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint);
 ali_utf8* ali_codepoints_to_utf8(AliAllocator allocator, ali_utf8codepoint* codepoints, ali_usize len);
@@ -485,8 +491,8 @@ ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...);
 void ali_sb_free(AliSb* self);
 
-bool ali_sb_read_file(AliSb* self, const char* path);
-bool ali_sb_write_file(AliSb* self, const char* path);
+ali_bool ali_sb_read_file(AliSb* self, const char* path);
+ali_bool ali_sb_write_file(AliSb* self, const char* path);
 
 #define ali_sb_push_strs(...) ali_sb_push_strs_null(__VA_ARGS__, NULL)
 
@@ -527,19 +533,19 @@ void ali_cmd_append_args_(char*** cmd, ...);
 char* ali_cmd_render(char** cmd);
 pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect);
 #define ali_cmd_run_async(cmd) ali_cmd_run_async_redirect(cmd, NULL)
-bool ali_wait_for_process(pid_t pid);
-bool ali_cmd_run_sync(char** cmd);
-bool ali_cmd_run_sync_and_reset(char** cmd);
+ali_bool ali_wait_for_process(pid_t pid);
+ali_bool ali_cmd_run_sync(char** cmd);
+ali_bool ali_cmd_run_sync_and_reset(char** cmd);
 
-bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count);
-bool ali_needs_rebuild1(const char* output, const char* input);
+ali_bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count);
+ali_bool ali_needs_rebuild1(const char* output, const char* input);
 
-bool ali_dup2_logged(int fd1, int fd2);
-bool ali_rename(char*** cmd, const char* from, const char* to);
-bool ali_remove(char*** cmd, const char* path);
+ali_bool ali_dup2_logged(int fd1, int fd2);
+ali_bool ali_rename(char*** cmd, const char* from, const char* to);
+ali_bool ali_remove(char*** cmd, const char* path);
 
-bool ali_create_dir_if_not_exists(const char* path);
-bool ali_create_dir_all_if_not_exists(char* path);
+ali_bool ali_create_dir_if_not_exists(const char* path);
+ali_bool ali_create_dir_all_if_not_exists(char* path);
 
 #define ali_rebuild_yourself(cmd, argc, argv) do { \
     const char* src = __FILE__; \
@@ -588,7 +594,7 @@ void ali_c_builder_add_libs_(AliCBuilder* builder, ...);
 void ali_c_builder_add_flags_(AliCBuilder* builder, ...);
 #define ali_c_builder_add_flags(...) ali_c_builder_add_flags_(__VA_ARGS__, NULL)
 void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliAllocator allocator, char* target, char* src);
-bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force);
+ali_bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, ali_bool force);
 AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder);
 
 // @module ali_cmd end
@@ -634,7 +640,7 @@ void* ali_memcpy(void* to, const void* from, ali_usize size) {
     return to;
 }
 
-void ali__assert(bool ok, const char* expr, const char* loc) {
+void ali__assert(ali_bool ok, const char* expr, const char* loc) {
     if (!ok) {
         ali_logn_error("[ASSERT] %s: Assertion failed: %s", loc, expr);
         ALI_ABORT();
@@ -756,7 +762,7 @@ ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, cons
     return &pushed_flag->as.num_f64;
 }
 
-bool* ali_flag_option(const char* name, const char* desc, bool default_, const char** aliases, ali_usize aliases_count) {
+ali_bool* ali_flag_option(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
@@ -806,14 +812,14 @@ void ali_flag_print_help(FILE* sink, const char* program) {
     }
 }
 
-bool ali_flag_parse(int* argc, char*** argv, const char* program) {
+ali_bool ali_flag_parse(int* argc, char*** argv, const char* program) {
 while_loop: while (*argc > 0) {
         char* arg = ali_shift_args(argc, argv);
 
         if (*arg == '-') {
-            bool found = false;
+            ali_bool found = false;
             for (ali_usize j = ali_flag_list_start; j < ali_flag_list_start + ali_flag_list_size; ++j) {
-                bool found_ = false;
+                ali_bool found_ = false;
                 if (strcmp(arg, ali_flag_list[j].name) == 0) found_ |= true;
                 if (ali_flag_list[j].aliases != NULL) {
                     for (ali_usize k = 0; !found_ && k < ali_flag_list[j].aliases_count; ++k) {
@@ -1112,7 +1118,7 @@ void ali_testing__fail(AliTesting* t, const char* file, int line, const char* fu
     t->error_count++;
 }
 
-bool ali_testing__expect(AliTesting* t, bool ok, const char* file, int line, const char* func, const char* fmt, ...) {
+ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int line, const char* func, const char* fmt, ...) {
     if (!ok) {
         va_list args;
 
@@ -1330,7 +1336,7 @@ ali_usize ali_utf8len(const ali_utf8* utf8) {
 	return len;
 }
 
-bool ali_codepoint_is_valid(ali_utf8codepoint codepoint) {
+ali_bool ali_codepoint_is_valid(ali_utf8codepoint codepoint) {
 	if (codepoint > 0x10FFFF) return false;
 	return true;
 }
@@ -1509,7 +1515,7 @@ AliSv ali_sv_chop_by_c(AliSv* self, char c) {
 	return chopped;
 }
 
-bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out) {
+ali_bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_u64 number = 0;
@@ -1525,7 +1531,7 @@ bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out) {
     return true;
 }
 
-bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out) {
+ali_bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_u64 number = 0;
@@ -1541,7 +1547,7 @@ bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out) {
     return true;
 }
 
-bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out) {
+ali_bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_u64 number = 0;
@@ -1555,7 +1561,7 @@ bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out) {
     return true;
 }
 
-bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out) {
+ali_bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_u64 number = 0;
@@ -1578,7 +1584,7 @@ bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out) {
     return true;
 }
 
-bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
+ali_bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     if (ali_sv_chop_prefix(sv, ali_sv_from_cstr("0b"))) {
@@ -1598,7 +1604,7 @@ bool ali_sv_chop_u64(AliSv* sv, ali_u64* out) {
     return ali_sv_chop_u64_dec(sv, out);
 }
 
-bool ali_sv_chop_f64(AliSv* sv, ali_f64* out) {
+ali_bool ali_sv_chop_f64(AliSv* sv, ali_f64* out) {
     if (sv->len == 0 || !isdigit(sv->start[0])) return false;
 
     ali_f64 number = 0;
@@ -1641,32 +1647,32 @@ AliSv ali_sv_chop_right(AliSv* self, ali_usize n) {
 	return chunk;
 }
 
-bool ali_sv_eq(AliSv left, AliSv right) {
-	bool eq = left.len == right.len;
+ali_bool ali_sv_eq(AliSv left, AliSv right) {
+	ali_bool eq = left.len == right.len;
 	for (ali_usize i = 0; eq && i < left.len; ++i) {
         eq &= left.start[i] == right.start[i];
 	}
 	return eq;
 }
 
-bool ali_sv_starts_with(AliSv self, AliSv prefix) {
+ali_bool ali_sv_starts_with(AliSv self, AliSv prefix) {
 	if (self.len < prefix.len) return false;
 	return ali_sv_eq(ali_sv_from_parts(self.start, prefix.len), prefix);
 }
 
-bool ali_sv_ends_with(AliSv self, AliSv suffix) {
+ali_bool ali_sv_ends_with(AliSv self, AliSv suffix) {
 	if (self.len < suffix.len) return false;
 	return ali_sv_eq(ali_sv_from_parts(self.start + self.len - suffix.len, suffix.len), suffix);
 }
 
-bool ali_sv_chop_prefix(AliSv* self, AliSv prefix) {
+ali_bool ali_sv_chop_prefix(AliSv* self, AliSv prefix) {
     if (!ali_sv_starts_with(*self, prefix)) return false;
     self->start += prefix.len;
     self->len -= prefix.len;
     return true;
 }
 
-bool ali_sv_chop_suffix(AliSv* self, AliSv suffix) {
+ali_bool ali_sv_chop_suffix(AliSv* self, AliSv suffix) {
     if (!ali_sv_ends_with(*self, suffix)) return false;
     self->len -= suffix.len;
     return true;
@@ -1734,7 +1740,7 @@ void ali_sb_free(AliSb* self) {
 	self->capacity = 0;
 }
 
-bool ali_sb_read_file(AliSb* self, const char* path) {
+ali_bool ali_sb_read_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "rb");
 	if (f == NULL) {
         ali_logn_error("Couldn't read %s: %s", path, strerror(errno));
@@ -1753,7 +1759,7 @@ bool ali_sb_read_file(AliSb* self, const char* path) {
 	return true;
 }
 
-bool ali_sb_write_file(AliSb* self, const char* path) {
+ali_bool ali_sb_write_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "wb");
 	if (f == NULL) {
         ali_logn_error("Couldn't write to %s: %s", path, strerror(errno));
@@ -1874,9 +1880,9 @@ pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
     ali_logn_info("[CMD] %s", render);
     ali_temp_rewind(stamp);
 
-    bool should_redirect_stdin = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDIN) != 0;
-    bool should_redirect_stdout = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDOUT) != 0;
-    bool should_redirect_stderr = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDERR) != 0;
+    ali_bool should_redirect_stdin = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDIN) != 0;
+    ali_bool should_redirect_stdout = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDOUT) != 0;
+    ali_bool should_redirect_stderr = redirect == NULL ? false : (redirect->redirect_bitmask & ALI_REDIRECT_STDERR) != 0;
 
     if (should_redirect_stdout || should_redirect_stderr) {
         if (pipe(redirect->out_pipe) < 0) {
@@ -1918,7 +1924,7 @@ pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
     return pid;
 }
 
-bool ali_wait_for_process(pid_t pid) {
+ali_bool ali_wait_for_process(pid_t pid) {
     for (;;) {
         int wstatus;
         if (waitpid(pid, &wstatus, 0) < 0) {
@@ -1946,18 +1952,18 @@ bool ali_wait_for_process(pid_t pid) {
     return true;
 }
 
-bool ali_cmd_run_sync(char** cmd) {
+ali_bool ali_cmd_run_sync(char** cmd) {
     pid_t pid = ali_cmd_run_async(cmd);
     return ali_wait_for_process(pid);
 }
 
-bool ali_cmd_run_sync_and_reset(char** cmd) {
-    bool ret = ali_cmd_run_sync(cmd);
+ali_bool ali_cmd_run_sync_and_reset(char** cmd) {
+    ali_bool ret = ali_cmd_run_sync(cmd);
     ali_da_get_header(cmd)->count = 0;
     return ret;
 }
 
-bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count) {
+ali_bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_count) {
     struct stat st;
 
     if (stat(output, &st) < 0) {
@@ -1980,7 +1986,7 @@ bool ali_needs_rebuild(const char* output, const char** inputs, ali_usize input_
     return false;
 }
 
-bool ali_needs_rebuild1(const char* output, const char* input) {
+ali_bool ali_needs_rebuild1(const char* output, const char* input) {
     return ali_needs_rebuild(output, &input, 1);
 }
 
@@ -2048,7 +2054,7 @@ void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliAllocato
     ali_da_append_ex(builder->allocator, builder->srcs, src);
 }
 
-bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
+ali_bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, ali_bool force) {
     ali_da_foreach(builder->subbuilders, AliCBuilder, subbuilder) {
         if (!ali_c_builder_execute(subbuilder, cmd, force)) return false;
         switch (subbuilder->type) {
@@ -2095,7 +2101,7 @@ bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, bool force) {
         ali_da_foreach(builder->libs, char*, lib) {
             ali_cmd_append_arg(*cmd, *lib);
         }
-        bool ret = ali_cmd_run_sync_and_reset(*cmd);
+        ali_bool ret = ali_cmd_run_sync_and_reset(*cmd);
         if (ret) {
             ali_logn_info("Built %s", builder->target);
         } else {
@@ -2115,19 +2121,19 @@ AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
     return &builder->subbuilders[count];
 }
 
-bool ali_rename(char*** cmd, const char* from, const char* to) {
+ali_bool ali_rename(char*** cmd, const char* from, const char* to) {
     ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
 
-bool ali_remove(char*** cmd, const char* path) {
+ali_bool ali_remove(char*** cmd, const char* path) {
     ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "rm", path);
     return ali_cmd_run_sync_and_reset(*cmd);
 }
 
-bool ali_dup2_logged(int fd1, int fd2) {
+ali_bool ali_dup2_logged(int fd1, int fd2) {
     if (dup2(fd1, fd2) < 0) {
         ali_logn_error("Couldn't dup2: %s", strerror(errno));
         return false;
@@ -2135,7 +2141,7 @@ bool ali_dup2_logged(int fd1, int fd2) {
     return true;
 }
 
-bool ali_create_dir_if_not_exists(const char* path) {
+ali_bool ali_create_dir_if_not_exists(const char* path) {
     if (mkdir(path, 0766) < 0) {
         if (errno != EEXIST) {
             ali_logn_error("Couldn't create %s: %s", path, strerror(errno));
@@ -2146,7 +2152,7 @@ bool ali_create_dir_if_not_exists(const char* path) {
     return true;
 }
 
-bool ali_create_dir_all_if_not_exists(char* path) {
+ali_bool ali_create_dir_all_if_not_exists(char* path) {
     ali_usize stamp = ali_temp_stamp();
 
     char* slash = ali_strchr(path, '/');
@@ -2176,6 +2182,8 @@ bool ali_create_dir_all_if_not_exists(char* path) {
 #define ALI_REMOVE_PREFIX_GUARD_
 
 // @module ali_util
+typedef ali_bool bool;
+
 #define STRINGIFY ALI_STRINGIFY
 #define STRINGIFY_2 ALI_STRINGIFY_2
 #define HERE ALI_HERE
