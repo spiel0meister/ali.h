@@ -364,6 +364,46 @@ void* ali_da_free_with_size(AliAllocator allocator, void* da);
 
 // @module ali_da end
 
+// @module ali_sv
+typedef struct {
+	char* start;
+	ali_usize len;
+}AliSv;
+
+#define ALI_SV_FMT "%.*s"
+#define ALI_SV_F(sv) (int)(sv).len, (sv).start
+
+AliSv ali_sv_from_parts(char* start, ali_usize len);
+AliSv ali_sv_from_cstr(char* cstr);
+
+void ali_sv_step(AliSv* self);
+AliSv ali_sv_trim_left(AliSv self);
+AliSv ali_sv_trim_right(AliSv self);
+AliSv ali_sv_trim(AliSv self);
+
+AliSv ali_sv_chop_left(AliSv* self, ali_usize n);
+AliSv ali_sv_chop_right(AliSv* self, ali_usize n);
+AliSv ali_sv_chop_by_c(AliSv* self, char c);
+
+bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out);
+bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
+
+bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
+
+bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
+bool ali_sv_chop_suffix(AliSv* self, AliSv suffix);
+
+bool ali_sv_eq(AliSv left, AliSv right);
+bool ali_sv_starts_with(AliSv self, AliSv prefix);
+bool ali_sv_ends_with(AliSv self, AliSv suffix);
+
+char* ali_temp_sv_to_cstr(AliSv sv);
+
+// @module ali_sv end
+
 // @module ali_slice
 
 typedef struct {
@@ -380,11 +420,14 @@ AliSlice ali_slice_from_da_with_size(void* da, ali_usize item_size);
 AliSlice ali_da_slice_with_size(void* da, ali_usize start, ali_usize end_exclusive, ali_usize item_size);
 #define ali_da_slice(da, start, end_exclusive) ali_da_slice_with_size(da, start, end_exclusive, sizeof(*(da)))
 AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive);
+AliSlice ali_slice_sv(AliSv sv, ali_usize start, ali_usize end_exclusive);
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end_exclusive);
 void* ali_slice_get(AliSlice slice, ali_usize i);
 
 #define ali_slice_for(slice, i) for (ali_usize i = 0; i < slice.count; ++i)
 #define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = slice.data; ptr < slice.data + (slice.count * slice.item_size); ++ptr)
+
+AliSv ali_sv_from_slice(AliSlice slice);
 
 // @module ali_slice end
 
@@ -427,47 +470,6 @@ ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, ali_usize* 
 ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, ali_usize len);
 
 // @module ali_utf8 end
-
-// @module ali_sv
-typedef struct {
-	char* start;
-	ali_usize len;
-}AliSv;
-
-#define ALI_SV_FMT "%.*s"
-#define ALI_SV_F(sv) (int)(sv).len, (sv).start
-
-AliSv ali_sv_from_parts(char* start, ali_usize len);
-AliSv ali_sv_from_cstr(char* cstr);
-AliSv ali_sv_from_slice(AliSlice slice);
-
-void ali_sv_step(AliSv* self);
-AliSv ali_sv_trim_left(AliSv self);
-AliSv ali_sv_trim_right(AliSv self);
-AliSv ali_sv_trim(AliSv self);
-
-AliSv ali_sv_chop_left(AliSv* self, ali_usize n);
-AliSv ali_sv_chop_right(AliSv* self, ali_usize n);
-AliSv ali_sv_chop_by_c(AliSv* self, char c);
-
-bool ali_sv_chop_u64_bin(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_oct(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_dec(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64_hex(AliSv* sv, ali_u64* out);
-bool ali_sv_chop_u64(AliSv* sv, ali_u64* out);
-
-bool ali_sv_chop_f64(AliSv* sv, ali_f64* out);
-
-bool ali_sv_chop_prefix(AliSv* self, AliSv prefix);
-bool ali_sv_chop_suffix(AliSv* self, AliSv suffix);
-
-bool ali_sv_eq(AliSv left, AliSv right);
-bool ali_sv_starts_with(AliSv self, AliSv prefix);
-bool ali_sv_ends_with(AliSv self, AliSv suffix);
-
-char* ali_temp_sv_to_cstr(AliSv sv);
-
-// @module ali_sv end
 
 // @module ali_sb
 typedef struct {
@@ -1207,6 +1209,18 @@ AliSlice ali_slice_cstr(char* str, ali_usize start, ali_usize end_exclusive) {
         .item_size = 1,
         .count = end_exclusive - start,
         .data = (ali_u8*)str + start,
+    };
+    return slice;
+}
+
+AliSlice ali_slice_sv(AliSv sv, ali_usize start, ali_usize end_exclusive) {
+    ali_assert(start < sv.len);
+    ali_assert(end_exclusive <= sv.len + 1);
+
+    AliSlice slice = {
+        .data = (ali_u8*)(sv.start + start),
+        .count = end_exclusive - start,
+        .item_size = 1,
     };
     return slice;
 }
