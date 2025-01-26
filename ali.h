@@ -339,11 +339,10 @@ typedef struct {
 }AliDaHeader;
 
 AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
-AliDaHeader* ali_da_get_header_with_size(void* da);
+AliDaHeader* ali_da_get_header(void* da);
 void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size);
 void* ali_da_free_with_size(AliAllocator allocator, void* da);
 
-#define ali_da_get_header(da) ali_da_get_header_with_size(da)
 #define ali_da_maybe_resize_ex(allocator, da, to_add) ((da) = ali_da_maybe_resize_with_size(allocator, da, to_add, sizeof(*(da))))
 
 #define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
@@ -1145,14 +1144,14 @@ AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_
 	return h;
 }
 
-AliDaHeader* ali_da_get_header_with_size(void* da) {
+AliDaHeader* ali_da_get_header(void* da) {
     ali_assert(da != NULL);
 	return (AliDaHeader*)da - 1;
 }
 
 void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size) {
     if (da == NULL) return ali_da_new_header_with_size(allocator, ALI_DA_DEFAULT_INIT_CAPACITY, item_size)->data;
-    AliDaHeader* h = ali_da_get_header_with_size(da);
+    AliDaHeader* h = ali_da_get_header(da);
 
     if (h->count + to_add >= h->capacity) {
         ali_usize old_capacity = h->capacity;
@@ -1167,7 +1166,7 @@ void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize 
 
 void* ali_da_free_with_size(AliAllocator allocator, void* da) {
     if (da != NULL) {
-        AliDaHeader* h = ali_da_get_header_with_size(da);
+        AliDaHeader* h = ali_da_get_header(da);
         ali_free(allocator, h);
     }
 	return (da = NULL);
@@ -1898,6 +1897,7 @@ pid_t ali_cmd_run_async_redirect(char** cmd, AliCmdRedirect* redirect) {
         }
     }
 
+    ali_cmd_shallow_append_arg(cmd, NULL);
     pid_t pid = fork();
     if (pid < 0) {
         ali_logn_error("Couldn't fork: %s", strerror(errno));
@@ -2122,6 +2122,7 @@ AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
 }
 
 ali_bool ali_rename(char*** cmd, const char* from, const char* to) {
+    if (*cmd == NULL) ali_da_maybe_resize_ex(ali_libc_allocator, *cmd, 1);
     ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);

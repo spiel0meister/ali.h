@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
         c_builder_reset(&builder, C_EXE, arena_allocator, BUILD_DIR"main", "main.c");
         c_builder_add_flags(&builder, "-Wall", "-Wextra", "-ggdb");
-        c_builder_add_libs(&builder, "-lm");
+        c_builder_add_libs(&builder, "-lm", "-lz");
         if (!c_builder_execute(&builder, &cmd, *force)) return 1;
 
         c_builder_reset(&builder, C_EXE, arena_allocator, BUILD_DIR"server", "server.c");
