@@ -16,6 +16,7 @@
         - utf8 (ali_utf8)
         - string view (ali_sv)
         - string builder (ali_sb)
+        - zlib (ali_zlib)
         - measure code (ali_measure)
         - cmd (ali_cmd)
 
@@ -49,6 +50,7 @@
 #ifndef ALI_H_
 #define ALI_H_
 #include <stdio.h>
+#include <stdlib.h>
 
 #define ALI_VERSION "0.1.0"
 
@@ -65,21 +67,6 @@
 #endif // ALI_WINDOWS
 
 // Customizable functions
-#ifndef ALI_MALLOC
-#include <stdlib.h>
-#define ALI_MALLOC malloc
-#endif // ALI_MALLOC
-
-#ifndef ALI_REALLOC
-#include <stdlib.h>
-#define ALI_REALLOC realloc
-#endif // ALI_REALLOC
-
-#ifndef ALI_FREE
-#include <stdlib.h>
-#define ALI_FREE free
-#endif // ALI_FREE
-
 #ifndef ALI_ABORT
 #include <stdlib.h>
 #define ALI_ABORT abort
@@ -498,6 +485,15 @@ ali_bool ali_sb_write_file(AliSb* self, const char* path);
 #define ali_sb_to_sv(sb) ali_sv_from_parts((sb).items, (sb).count)
 
 // @module ali_sb end
+
+// @module ali_zlib
+#ifdef ALI_ZLIB
+
+ali_bool ali_zlib_compress(AliSb* out, const ali_u8* to_compress, ali_usize to_compress_size);
+ali_bool ali_zlib_decompress(AliSb* out, const ali_u8* to_decompress, ali_usize to_decompress_size);
+
+#endif // ALI_ZLIB
+// @module ali_zlib end
 
 // @module ali_measure
 double ali_get_now();
@@ -949,7 +945,7 @@ AliAllocator ali_libc_allocator = {
 // @module ali_arena
 
 AliRegion* ali_region_new(ali_usize capacity) {
-	AliRegion* new = ALI_MALLOC(sizeof(*new) + capacity);
+	AliRegion* new = malloc(sizeof(*new) + capacity);
 	ali_assert(new != NULL);
 	new->count = 0;
 	new->capacity = capacity;
@@ -969,8 +965,8 @@ void* ali_region_alloc(AliRegion* self, ali_usize size, ali_usize alignment) {
 
 void* ali_arena_alloc(void* data, ali_usize size, ali_usize alignment) {
     AliArena* self = (AliArena*)data;
+    ali_assert(self != NULL);
 
-    if (self == NULL) return ALI_MALLOC(size);
     if (self->region_capacity == 0) self->region_capacity = ALI_REGION_DEFAULT_CAP;
     ali_assert(self->region_capacity >= size);
 
@@ -997,9 +993,10 @@ void* ali_arena_alloc(void* data, ali_usize size, ali_usize alignment) {
 
 void* ali_arena_realloc(void* data, void* ptr, ali_usize oldsize, ali_usize newsize, ali_usize alignment) {
     AliArena* arena = (AliArena*)data;
+    ali_assert(arena != NULL);
+
     void* copy = ali_arena_alloc(arena, newsize, alignment);
     ali_memcpy(copy, ptr, oldsize);
-    if (arena == NULL) ALI_FREE(data);
     return copy;
 }
 
@@ -1018,7 +1015,7 @@ void ali_arena_reset(AliArena* self) {
 void ali_arena_free(AliArena* self) {
 	while (self->start != NULL) {
         AliRegion* next = self->start->next;
-        ALI_FREE(self->start);
+        free(self->start);
         self->start = next;
 	}
 	self->end = NULL;
@@ -1694,7 +1691,7 @@ void ali_sb_maybe_resize(AliSb* self, ali_usize to_add) {
         	else self->capacity *= 2;
         }
 
-        self->data = ALI_REALLOC(self->data, self->capacity);
+        self->data = realloc(self->data, self->capacity);
 	}
 }
 
@@ -1727,13 +1724,13 @@ void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...) {
 	char* str;
 	ali_assert(vasprintf(&str, fmt, args) == 0);
 	ali_sb_push_strs(self, str);
-	ALI_FREE(str);
+	free(str);
 
 	va_end(args);
 }
 
 void ali_sb_free(AliSb* self) {
-	ALI_FREE(self->data);
+	free(self->data);
 	self->data = NULL;
 	self->count = 0;
 	self->capacity = 0;
@@ -1772,6 +1769,94 @@ ali_bool ali_sb_write_file(AliSb* self, const char* path) {
 }
 
 // @module ali_sb end
+
+// @module ali_zlib
+
+#ifdef ALI_ZLIB
+#include <zlib.h>
+
+ali_bool ali_zlib_compress(AliSb* out, const ali_u8* to_compress, ali_usize to_compress_size) {
+    ali_bool result = true;
+
+    z_stream stream;
+    stream.opaque = Z_NULL;
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+
+    int ret = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
+    if (ret != Z_OK) {
+        ali_logn_error("Couldn't initialize deflate stream: %s", zError(ret));
+        ALI_RETURN_DEFER(false);
+    }
+
+    stream.avail_in = to_compress_size;
+    stream.next_in = (ali_u8*)to_compress;
+
+    ali_u8 buffer[(4 << 10)];
+    do {
+        stream.avail_out = (4 << 10);
+        stream.next_out = buffer;
+
+        ret = deflate(&stream, Z_FINISH);
+        if (ret == Z_STREAM_ERROR) {
+            ali_logn_error("Couldn't deflate: %s", zError(ret));
+            ALI_RETURN_DEFER(false);
+        }
+
+        ali_usize have = (4 << 10) - stream.avail_out;
+        ali_sb_push_nstr(out, (char*)buffer, have);
+    } while (stream.avail_out == 0);
+
+defer:
+    deflateEnd(&stream);
+    return result;
+}
+
+ali_bool ali_zlib_decompress(AliSb* out, const ali_u8* to_decompress, ali_usize to_decompress_size) {
+    ali_bool result = true;
+
+    z_stream stream;
+    stream.opaque = Z_NULL;
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+    stream.avail_in = 0;
+    stream.next_in = Z_NULL;
+
+    int ret = inflateInit(&stream);
+    if (ret != Z_OK) {
+        ali_logn_error("Couldn't initialize inflate stream: %s", zError(ret));
+        ALI_RETURN_DEFER(false);
+    }
+
+    stream.avail_in = to_decompress_size;
+    stream.next_in = (ali_u8*)to_decompress;
+
+    ali_u8 buffer[(4 << 10)];
+    do {
+        stream.avail_out = (4 << 10);
+        stream.next_out = buffer;
+
+        ret = inflate(&stream, Z_NO_FLUSH);
+        switch (ret) {
+            case Z_NEED_DICT:
+            case Z_STREAM_ERROR:
+            case Z_DATA_ERROR:
+            case Z_MEM_ERROR:
+                ali_logn_error("Couldn't inflate: %s", zError(ret));
+                ALI_RETURN_DEFER(false);
+        }
+
+        ali_usize have = (4 << 10) - stream.avail_out;
+        ali_sb_push_nstr(out, (char*)buffer, have);
+    } while (stream.avail_out == 0);
+
+defer:
+    inflateEnd(&stream);
+    return result;
+}
+
+#endif // ALI_ZLIB
+// @module ali_zlib end
 
 // @module ali_measure
 
