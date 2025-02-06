@@ -80,6 +80,10 @@ typedef enum {
 #define false ali_false
 #define true ali_true
 
+#define ALI_TRAP() __builtin_trap()
+#define ALI_BREAKPOINT() ALI_TRAP()
+#define ALI_BREAKPOINT_IF(expr) if (expr) { ALI_TRAP() }
+
 #define ALI_STRINGIFY(x) #x
 #define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
 #define ALI_HERE __FILE__ ":" ALI_STRINGIFY_2(__LINE__)
@@ -638,7 +642,7 @@ void* ali_memcpy(void* to, const void* from, ali_usize size) {
 void ali__assert(ali_bool ok, const char* expr, const char* loc) {
     if (!ok) {
         ali_logn_error("[ASSERT] %s: Assertion failed: %s", loc, expr);
-        ALI_ABORT();
+        ALI_TRAP();
     }
 }
 
