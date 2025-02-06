@@ -97,9 +97,9 @@ void ali_xoshiro256pp_seed(AliXoshiro256ppState *state, ali_u64 seed[4]);
 
 void ali_srand(ali_u64 seed);
 
-ali_u64 ali_rand();
+ali_u64 ali_rand(void);
 ali_u64* ali_temp_rand_sequence(ali_usize count);
-ali_f64 ali_rand_float();
+ali_f64 ali_rand_float(void);
 ali_u64 ali_rand_range(ali_u64 min, ali_u64 max);
 
 #endif // ALI_MATH_H_
@@ -260,7 +260,7 @@ ali_f32 ali_cubebezierf(ali_f32 start, ali_f32 end, ali_f32 control1, ali_f32 co
 AliXoshiro256ppState xoshiro_global_state = { { 0x96EA83C1, 0x218B21E5, 0xAA91FEBD, 0x976414D4 } };
 ali_u64 ali_rand_seed = 0xAABBCCDD;
 
-ali_u64 ali_rand_splitmix64() {
+ali_u64 ali_rand_splitmix64(void) {
     ali_u64 z = (ali_rand_seed += 0x9e3779b97f4a7c15);
     z = (z ^ (z >> 30))*0xbf58476d1ce4e5b9;
     z = (z ^ (z >> 27))*0x94d049bb133111eb;
@@ -302,7 +302,7 @@ ali_u64* ali_temp_rand_sequence(ali_usize count) {
 	return out;
 }
 
-ali_f64 ali_rand_float() {
+ali_f64 ali_rand_float(void) {
     ali_u64 value = ali_rand();
     return (ali_f64)value / (ali_f64)UINT64_MAX;
 }
@@ -312,7 +312,7 @@ ali_u64 ali_rand_range(ali_u64 min, ali_u64 max) {
     return ali_rand() % (max - min) + min;
 }
 
-ali_u64 ali_rand() {
+ali_u64 ali_rand(void) {
 	return ali_xoshiro256pp_next(&xoshiro_global_state);
 }
 
