@@ -482,6 +482,8 @@ void ali_sb_push_sprintf(AliSb* self, const char* fmt, ...);
 void ali_sb_free(AliSb* self);
 
 ali_bool ali_sb_read_file(AliSb* self, const char* path);
+ali_bool ali_sb_read_file_by_chunks(AliSb* self, const char* path);
+
 ali_bool ali_sb_write_file(AliSb* self, const char* path);
 
 #define ali_sb_push_strs(...) ali_sb_push_strs_null(__VA_ARGS__, NULL)
@@ -1759,6 +1761,33 @@ ali_bool ali_sb_read_file(AliSb* self, const char* path) {
 	return true;
 }
 
+ali_bool ali_sb_read_file_by_chunks(AliSb* self, const char* path) {
+    ali_bool result = true;
+
+    FILE* f = fopen(path, "rb");
+    if (f == NULL) {
+        ali_logn_error("Couldn't open %s: %s", path, strerror(errno));
+        ALI_RETURN_DEFER(false);
+    }
+
+    char buffer[1024];
+    while (true) {
+        ali_isize n = fread(buffer, 1, sizeof(buffer), f);
+        if (n < 0) {
+            ali_logn_error("Couldn't read from %s: %s", path, strerror(errno));
+            return false;
+        } else if (n == 0) {
+            break;
+        }
+
+        ali_sb_push_nstr(self, buffer, n);
+    }
+
+defer:
+    if (f != NULL) fclose(f);
+    return result;
+}
+
 ali_bool ali_sb_write_file(AliSb* self, const char* path) {
 	FILE* f = fopen(path, "wb");
 	if (f == NULL) {
@@ -2501,6 +2530,8 @@ typedef ali_utf8codepoint utf8codepoint;
 #define sb_to_sv ali_sb_to_sv
 
 #define sb_read_file ali_sb_read_file
+#define sb_read_file_by_chunks ali_sb_read_file_by_chunks
+
 #define sb_write_file ali_sb_write_file
 // @module ali_sb end
 
