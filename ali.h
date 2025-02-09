@@ -1511,9 +1511,10 @@ AliSv ali_sv_chop_by_c(AliSv* self, char c) {
 
         if (self->len == 0) break;
 	}
-	ali_sv_step(self);
 
 	chopped.len = self->start - chopped.start;
+	ali_sv_step(self);
+
 	return chopped;
 }
 
