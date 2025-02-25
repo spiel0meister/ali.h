@@ -211,10 +211,17 @@ typedef struct {
     FlagAs as;
 }AliFlag;
 
-const char** ali_flag_string(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count);
-ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count);
-ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
-ali_bool* ali_flag_option(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count);
+const char** ali_flag_string_ex(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count);
+#define ali_flag_string(name, desc, default_) ali_flag_string_ex(name, desc, default_, NULL, 0)
+
+ali_u64* ali_flag_u64_ex(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count);
+#define ali_flag_u64(name, desc, default_) ali_flag_u64_ex(name, desc, default_, NULL, 0)
+
+ali_f64* ali_flag_f64_ex(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
+#define ali_flag_f64(name, desc, default_) ali_flag_f64_ex(name, desc, default_, NULL, 0)
+
+ali_bool* ali_flag_option_ex(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count);
+#define ali_flag_option(name, desc, default_) ali_flag_option_ex(name, desc, default_, NULL, 0)
 
 void ali_flag_reset(void);
 
@@ -339,7 +346,7 @@ AliDaHeader* ali_da_get_header(void* da);
 void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_size);
 void* ali_da_free(void* da);
 
-#define ali_da_maybe_resize(da, to_add) ((da) = ali_da_maybe_resize_with_size(sizeof(*(da))))
+#define ali_da_maybe_resize(da, to_add) ((da) = ali_da_maybe_resize_with_size(da, to_add, sizeof(*(da))))
 
 #define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
 #define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(da)->count = 0; }
@@ -552,7 +559,7 @@ ali_bool ali_create_dir_all_if_not_exists(char* path);
     const char* src = __FILE__; \
     const char* dst = argv[0]; \
     if (ali_needs_rebuild1(dst, src)) { \
-        const char* old_dst = temp_sprintf("%s.prev", dst); \
+        const char* old_dst = ali_temp_sprintf("%s.prev", dst); \
         if (!ali_rename(cmd, dst, old_dst)) { \
             exit(1); \
         } \
@@ -691,7 +698,7 @@ AliFlag* ali_flag_push(AliFlag flag) {
      return flag_;
 }
 
-const char** ali_flag_string(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count) {
+const char** ali_flag_string_ex(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
@@ -705,7 +712,7 @@ const char** ali_flag_string(const char* name, const char* desc, const char* def
     return &pushed_flag->as.string;
 }
 
-ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count) {
+ali_u64* ali_flag_u64_ex(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
@@ -719,7 +726,7 @@ ali_u64* ali_flag_u64(const char* name, const char* desc, ali_u64 default_, cons
     return &pushed_flag->as.num_u64;
 }
 
-ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count) {
+ali_f64* ali_flag_f64_ex(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
@@ -733,7 +740,7 @@ ali_f64* ali_flag_f64(const char* name, const char* desc, ali_f64 default_, cons
     return &pushed_flag->as.num_f64;
 }
 
-ali_bool* ali_flag_option(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count) {
+ali_bool* ali_flag_option_ex(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count) {
     AliFlag flag = {
         .name = name,
         .description = desc,
@@ -1138,7 +1145,7 @@ void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_s
     return h->data;
 }
 
-void* ali_da_free_with_size(void* da) {
+void* ali_da_free(void* da) {
     if (da != NULL) {
         AliDaHeader* h = ali_da_get_header(da);
         ali_free(h->allocator, h);
@@ -2212,6 +2219,11 @@ typedef ali_isize isize;
 // @module ali_log end
 
 // @module ali_flag
+
+#define flag_string_ex ali_flag_string_ex
+#define flag_u64_ex ali_flag_u64_ex
+#define flag_f64_ex ali_flag_f64_ex
+#define flag_option_ex ali_flag_option_ex
 
 #define flag_string ali_flag_string
 #define flag_u64 ali_flag_u64
