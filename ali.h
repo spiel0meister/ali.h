@@ -247,6 +247,8 @@ void* ali_sprintf(AliAllocator allocator, const char* fmt, ...);
 
 extern AliAllocator ali_libc_allocator;
 
+// @module ali_allocator end
+
 // @module ali_bump
 
 typedef struct {
@@ -260,9 +262,8 @@ AliAllocator ali_bump_allocator(AliBump* bump);
 
 // @module ali_bump end
 
-// @module ali_allocator end
-
 // @module ali_arena 
+
 #ifndef ALI_REGION_DEFAULT_CAP
 #define ALI_REGION_DEFAULT_CAP (4 << 10)
 #endif // ALI_REGION_DEFAULT_CAP
@@ -291,6 +292,7 @@ AliArenaMark ali_arena_mark(AliArena* self);
 void ali_arena_rollback(AliArena* self, AliArenaMark mark);
 void ali_arena_reset(AliArena* self);
 void ali_arena_free(AliArena* self);
+
 // @module ali_arena end
 
 // @module ali_testing
@@ -317,6 +319,7 @@ ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int l
 // @module ali_testing end
 
 // @module ali_da
+
 #ifndef ALI_DA_DEFAULT_INIT_CAPACITY
 #define ALI_DA_DEFAULT_INIT_CAPACITY 8
 #endif // ALI_DA_DEFAULT_INIT_CAPACITY
@@ -329,31 +332,28 @@ typedef struct {
 	ali_u8 data[];
 }AliDaHeader;
 
+void* ali_da_create(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
+
 AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
 AliDaHeader* ali_da_get_header(void* da);
-void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size);
-void* ali_da_free_with_size(AliAllocator allocator, void* da);
+void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_size);
+void* ali_da_free(void* da);
 
-#define ali_da_maybe_resize_ex(allocator, da, to_add) ((da) = ali_da_maybe_resize_with_size(allocator, da, to_add, sizeof(*(da))))
+#define ali_da_maybe_resize(da, to_add) ((da) = ali_da_maybe_resize_with_size(sizeof(*(da))))
 
 #define ali_da_getlen(da) ((da) == NULL ? 0 : ali_da_get_header(da)->count)
 #define ali_da_reset(da) if ((da) != NULL) { ali_da_get_header(da)->count = 0; }
 
-#define ali_da_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header(da)->count++] = item)
-#define ali_da_shallow_append_ex(allocator, da, item) (ali_da_maybe_resize_ex(allocator, da, 1), (da)[ali_da_get_header(da)->count] = item)
-#define ali_da_append_many_ex(allocator, da, items, item_count) do { \
-    ali_da_maybe_resize(arena, da, 1); \
+#define ali_da_append(da, item) (ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count++] = item)
+#define ali_da_shallow_append(da, item) (ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count] = item)
+#define ali_da_append_many(da, items, item_count) do { \
+    ali_da_maybe_resize(da, 1); \
     memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
     ali_da_get_header(da)->count += item_count; \
 } while (0)
 
-#define ali_da_append(da, item) ali_da_append_ex(ali_libc_allocator, da, item)
-#define ali_da_shallow_append(da, item) ali_da_shallow_append_ex(ali_libc_allocator, da, item)
-#define ali_da_append_many(da, items, item_count) ali_da_append_many_ex(ali_libc_allocator, da, items, item_count)
-
-#define ali_da_free(allocator, da) ((da) = ali_da_free_with_size(allocator, da))
 #define ali_da_remove_unordered(da, i) (ali_assert(i >= 0), (da)[i] = (da)[--ali_da_get_header(da)->count])
-#define ali_da_remove_ordered(da, i) (ali_assert(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(ali_libc_allocator, da)->count--)
+#define ali_da_remove_ordered(da, i) (ali_assert(i >= 0), memmove(da + i, da + i + 1, (ali_da_get_header(da)->count - i - 1) * sizeof(*(da))), ali_da_get_header(da)->count--)
 
 #define ali_da_for(da, iter_name) for (ali_usize iter_name = 0; iter_name < ali_da_getlen(da); ++iter_name)
 #define ali_da_foreach(da, Type, iter_name) for (Type* iter_name = da; iter_name < da + ali_da_getlen(da); ++iter_name)
@@ -567,36 +567,6 @@ ali_bool ali_create_dir_all_if_not_exists(char* path);
         exit(0); \
     } \
 } while (0)
-
-typedef enum {
-    C_EXE,
-    C_OBJ,
-    C_DYNLIB,
-    // TODO: implement
-    // C_STATICLIB,
-}AliCBuilderType;
-
-typedef struct AliCBuilder {
-    AliCBuilderType type;
-    AliAllocator allocator;
-    struct AliCBuilder* subbuilders;
-
-    char* cc;
-    char* target;
-    char** srcs;
-    char** cflags;
-    char** libs;
-}AliCBuilder;
-
-void ali_c_builder_add_srcs_(AliCBuilder* builder, ...);
-#define ali_c_builder_add_srcs(...) ali_c_builder_add_srcs_(__VA_ARGS__, NULL)
-void ali_c_builder_add_libs_(AliCBuilder* builder, ...);
-#define ali_c_builder_add_libs(...) ali_c_builder_add_libs_(__VA_ARGS__, NULL)
-void ali_c_builder_add_flags_(AliCBuilder* builder, ...);
-#define ali_c_builder_add_flags(...) ali_c_builder_add_flags_(__VA_ARGS__, NULL)
-void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliAllocator allocator, char* target, char* src);
-ali_bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, ali_bool force);
-AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder);
 
 // @module ali_cmd end
 
@@ -1140,11 +1110,12 @@ ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int l
 // @module ali_testing end
 
 // @module ali_da
-AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size) {
-	AliDaHeader* h = ali_alloc(allocator, sizeof(*h) + item_size * init_capacity);
-	h->count = 0;
-	h->capacity = init_capacity;
-	return h;
+void* ali_da_create(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size) {
+    AliDaHeader* header = ali_alloc(allocator, sizeof(*header) + item_size * init_capacity);
+    header->allocator = allocator;
+    header->count = 0;
+    header->capacity = init_capacity;
+    return header->data;
 }
 
 AliDaHeader* ali_da_get_header(void* da) {
@@ -1152,8 +1123,8 @@ AliDaHeader* ali_da_get_header(void* da) {
 	return (AliDaHeader*)da - 1;
 }
 
-void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize to_add, ali_usize item_size) {
-    if (da == NULL) return ali_da_new_header_with_size(allocator, ALI_DA_DEFAULT_INIT_CAPACITY, item_size)->data;
+void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_size) {
+    ali_assert(da != NULL);
     AliDaHeader* h = ali_da_get_header(da);
 
     if (h->count + to_add >= h->capacity) {
@@ -1162,15 +1133,15 @@ void* ali_da_maybe_resize_with_size(AliAllocator allocator, void* da, ali_usize 
             if (h->capacity == 0) h->capacity = 8;
             else h->capacity *= 8;
         }
-        h = ali_realloc(allocator, h, sizeof(*h) + old_capacity * item_size, sizeof(*h) + h->capacity * item_size);
+        h = ali_realloc(h->allocator, h, sizeof(*h) + old_capacity * item_size, sizeof(*h) + h->capacity * item_size);
     }
     return h->data;
 }
 
-void* ali_da_free_with_size(AliAllocator allocator, void* da) {
+void* ali_da_free_with_size(void* da) {
     if (da != NULL) {
         AliDaHeader* h = ali_da_get_header(da);
-        ali_free(allocator, h);
+        ali_free(h->allocator, h);
     }
 	return (da = NULL);
 }
@@ -2109,139 +2080,8 @@ ali_bool ali_needs_rebuild1(const char* output, const char* input) {
     return ali_needs_rebuild(output, &input, 1);
 }
 
-void ali_c_builder_add_srcs_(AliCBuilder* builder, ...) {
-    va_list args;
-    va_start(args, builder);
-
-    char* src;
-    do {
-        src = va_arg(args, char*);
-        if (src != NULL) {
-            ali_da_append_ex(builder->allocator, builder->srcs, src);
-        }
-    } while (src != NULL);
-
-    va_end(args);
-}
-
-void ali_c_builder_add_libs_(AliCBuilder* builder, ...) {
-    va_list args;
-    va_start(args, builder);
-
-    char* lib;
-    do {
-        lib = va_arg(args, char*);
-        if (lib != NULL) {
-            ali_da_append_ex(builder->allocator, builder->libs, lib);
-        }
-    } while (lib != NULL);
-
-    va_end(args);
-}
-
-void ali_c_builder_add_flags_(AliCBuilder* builder, ...) {
-    va_list args;
-    va_start(args, builder);
-
-    char* flag;
-    do {
-        flag = va_arg(args, char*);
-        if (flag != NULL) {
-            ali_da_append_ex(builder->allocator, builder->cflags, flag);
-        }
-    } while (flag != NULL);
-
-    va_end(args);
-}
-
-void ali_c_builder_reset(AliCBuilder* builder, AliCBuilderType type, AliAllocator allocator, char* target, char* src) {
-    ali_da_reset(builder->srcs);
-    ali_da_reset(builder->cflags);
-    ali_da_reset(builder->libs);
-
-#if __GNUC__
-    builder->cc = "gcc";
-#elif defined(__clang__)
-    builder->cc = "clang";
-#else
-#error "Unsupported compiler"
-#endif
-
-    builder->allocator = allocator;
-    builder->type = type;
-    builder->target = target;
-    ali_da_append_ex(builder->allocator, builder->srcs, src);
-}
-
-ali_bool ali_c_builder_execute(AliCBuilder* builder, char*** cmd, ali_bool force) {
-    ali_da_foreach(builder->subbuilders, AliCBuilder, subbuilder) {
-        if (!ali_c_builder_execute(subbuilder, cmd, force)) return false;
-        switch (subbuilder->type) {
-            case C_EXE:
-                break;
-            case C_OBJ:
-                ali_c_builder_add_srcs(builder, subbuilder->target);
-                break;
-            case C_DYNLIB:
-                ali_c_builder_add_libs(builder, ali_temp_sprintf("-l:%s", subbuilder->target));
-                break;
-            default:
-                ALI_UNREACHABLE();
-        }
-    }
-
-    if (force || ali_needs_rebuild(builder->target, (const char**)builder->srcs, ali_da_getlen(builder->srcs))) {
-        ali_logn_info("Building %s", builder->target);
-
-        ali_cmd_append_args(cmd, builder->cc);
-        if (ali_da_getlen(builder->srcs) == 0) {
-            ali_logn_error("No source files");
-            return false;
-        }
-        ali_da_foreach(builder->cflags, char*, flag) {
-            ali_cmd_append_arg(*cmd, *flag);
-        }
-        switch (builder->type) {
-            case C_EXE:
-                break;
-            case C_OBJ:
-                ali_cmd_append_args(cmd, "-c");
-                break;
-            case C_DYNLIB:
-                ali_cmd_append_args(cmd, "-fPIC", "-shared");
-                break;
-            default:
-                ALI_UNREACHABLE();
-        }
-        ali_cmd_append_args(cmd, "-o", builder->target);
-        ali_da_foreach(builder->srcs, char*, src) {
-            ali_cmd_append_arg(*cmd, *src);
-        }
-        ali_da_foreach(builder->libs, char*, lib) {
-            ali_cmd_append_arg(*cmd, *lib);
-        }
-        ali_bool ret = ali_cmd_run_sync_and_reset(*cmd);
-        if (ret) {
-            ali_logn_info("Built %s", builder->target);
-        } else {
-            ali_logn_error("Failed to built %s", builder->target);
-        }
-        return ret;
-    } else {
-        ali_logn_warn("No need to build %s", builder->target);
-        return true;
-    }
-}
-
-AliCBuilder* ali_c_builder_next_subbuilder(AliCBuilder* builder) {
-    ali_usize count = ali_da_get_header(builder->subbuilders)->count;
-    ali_da_maybe_resize_ex(builder->allocator, builder->subbuilders, 1);
-    ali_da_get_header(builder->subbuilders)->count++;
-    return &builder->subbuilders[count];
-}
-
 ali_bool ali_rename(char*** cmd, const char* from, const char* to) {
-    if (*cmd == NULL) ali_da_maybe_resize_ex(ali_libc_allocator, *cmd, 1);
+    if (*cmd == NULL) ali_da_maybe_resize(*cmd, 1);
     ali_da_get_header(*cmd)->count = 0;
     ali_cmd_append_args(cmd, "mv", from, to);
     return ali_cmd_run_sync_and_reset(*cmd);
@@ -2559,13 +2399,6 @@ typedef ali_utf8codepoint utf8codepoint;
 #define create_dir_if_not_exists ali_create_dir_if_not_exists
 #define create_dir_all_if_not_exists ali_create_dir_all_if_not_exists
 #define rebuild_yourself ali_rebuild_yourself
-
-#define c_builder_add_srcs ali_c_builder_add_srcs
-#define c_builder_add_libs ali_c_builder_add_libs
-#define c_builder_add_flags ali_c_builder_add_flags
-#define c_builder_reset ali_c_builder_reset
-#define c_builder_execute ali_c_builder_execute
-#define c_builder_next_subbuilder ali_c_builder_next_subbuilder
 
 // @module ali_cmd end
 
