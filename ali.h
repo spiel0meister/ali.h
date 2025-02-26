@@ -165,12 +165,14 @@ typedef enum {
 extern FILE* ali_global_logfile;
 extern AliLogLevel ali_global_loglevel;
 
-void ali_init_global_log();
+void ali_init_global_log(void);
 
 void ali_log_logn_va(AliLogLevel level, const char* fmt, va_list args);
 void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args);
+
 ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_log_logn(AliLogLevel level, const char* fmt, ...);
+ALI_FORMAT_ATTRIBUTE(2, 3)
 void ali_log_log(AliLogLevel level, const char* fmt, ...);
 
 #define ali_logn_info(...) ali_log_logn(LOG_INFO, __VA_ARGS__)
