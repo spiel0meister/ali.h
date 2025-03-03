@@ -111,6 +111,8 @@ typedef enum {
 #define ali_add_u64_checked(a, b, ptr) (*(ptr) = (a) + (b), b <= UINT64_MAX - a)
 #define ali_sub_u64_checked(a, b, ptr) (*(ptr) = (a) - (b), b <= a)
 
+#define ali_shift(ptr, size) (ali_assert((size) > 0), (size)--, *(ptr)++)
+
 // 'path/to/file.c' -> 'file.c', '/path/to/dir' -> 'dir'
 const char* ali_path_name(const char* path);
 char* ali_shift_args(int* argc, char*** argv);
@@ -458,21 +460,21 @@ void ali_temp_reset(void);
 
 // @module ali_utf8
 typedef ali_u8 ali_utf8;
-typedef ali_u32 ali_utf8codepoint;
+typedef ali_u32 ali_rune;
 
 #define ALI_UTF8(cstr) (ali_utf8*)(cstr)
 
 ali_usize ali_utf8len(const ali_utf8* utf8);
-ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, ali_usize* codepoint_size);
-ali_utf8codepoint* ali_utf8_to_codepoints(AliAllocator allocator, const ali_utf8* utf8, ali_usize* count);
+ali_rune ali_utf8c_to_rune(const ali_utf8* utf8c, ali_usize* rune_size);
+ali_rune* ali_utf8_to_runes(AliAllocator allocator, const ali_utf8* utf8, ali_usize* count);
 
-ali_bool ali_is_codepoint_valid(ali_utf8codepoint codepoint);
-ali_usize ali_codepoint_size(ali_utf8codepoint codepoint);
-const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint);
-ali_utf8* ali_codepoints_to_utf8(AliAllocator allocator, ali_utf8codepoint* codepoints, ali_usize len);
+ali_bool ali_is_rune_valid(ali_rune rune);
+ali_usize ali_rune_size(ali_rune rune);
+const ali_utf8* ali_rune_to_utf8(ali_rune rune);
+ali_utf8* ali_runes_to_utf8(AliAllocator allocator, ali_rune* runes, ali_usize len);
 
-ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, ali_usize* count);
-ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, ali_usize len);
+ali_rune* ali_temp_utf8_to_runes(const ali_utf8* utf8, ali_usize* count);
+ali_utf8* ali_temp_runes_to_utf8(ali_rune* runes, ali_usize len);
 
 // @module ali_utf8 end
 
@@ -1310,122 +1312,122 @@ void ali_temp_reset(void) {
 ali_usize ali_utf8len(const ali_utf8* utf8) {
 	ali_usize len = 0;
 	while (*utf8 != 0) {
-        ali_usize codepoint_size = 0;
-        ali_utf8c_to_codepoint(utf8, &codepoint_size);
+        ali_usize rune_size = 0;
+        ali_utf8c_to_rune(utf8, &rune_size);
         len++;
-        utf8 += codepoint_size;
+        utf8 += rune_size;
 	}
 	return len;
 }
 
-ali_bool ali_codepoint_is_valid(ali_utf8codepoint codepoint) {
-	if (codepoint > 0x10FFFF) return false;
+ali_bool ali_rune_is_valid(ali_rune rune) {
+	if (rune > 0x10FFFF) return false;
 	return true;
 }
 
-ali_utf8codepoint ali_utf8c_to_codepoint(const ali_utf8* utf8c, ali_usize* codepoint_size) {
-	ali_utf8codepoint codepoint = 0;
-	ali_usize codepoint_size_ = 0;
+ali_rune ali_utf8c_to_rune(const ali_utf8* utf8c, ali_usize* rune_size) {
+	ali_rune rune = 0;
+	ali_usize rune_size_ = 0;
 
 	if ((utf8c[0] & 0x80) == 0x00) {
-        codepoint = utf8c[0];
-        codepoint_size_ = 1;
+        rune = utf8c[0];
+        rune_size_ = 1;
 	} else if ((utf8c[0] & 0xE0) == 0xC0) {
-        codepoint = ((utf8c[0] & 0x1F) << 6*1) | ((utf8c[1] & 0x3F) << 6*0);
-        codepoint_size_ = 2;
+        rune = ((utf8c[0] & 0x1F) << 6*1) | ((utf8c[1] & 0x3F) << 6*0);
+        rune_size_ = 2;
 	} else if ((utf8c[0] & 0xF0) == 0xE0) {
-        codepoint = ((utf8c[0] & 0x1F) << 6*2) | ((utf8c[1] & 0x3F) << 6*1) | ((utf8c[2] & 0x3F) << 6*0);
-        codepoint_size_ = 3;
+        rune = ((utf8c[0] & 0x1F) << 6*2) | ((utf8c[1] & 0x3F) << 6*1) | ((utf8c[2] & 0x3F) << 6*0);
+        rune_size_ = 3;
 	} else if ((utf8c[0] & 0xF8) == 0xF0) {
-        codepoint = ((utf8c[0] & 0x1F) << 6*3) | ((utf8c[1] & 0x3F) << 6*2) | ((utf8c[2] & 0x3F) << 6*1) | ((utf8c[3] & 0x3F) << 6*0);
-        codepoint_size_ = 4;
+        rune = ((utf8c[0] & 0x1F) << 6*3) | ((utf8c[1] & 0x3F) << 6*2) | ((utf8c[2] & 0x3F) << 6*1) | ((utf8c[3] & 0x3F) << 6*0);
+        rune_size_ = 4;
 	} else {
         // invalid
         return -1;
 	}
 
-	if (codepoint_size) *codepoint_size = codepoint_size_;
-	return codepoint;
+	if (rune_size) *rune_size = rune_size_;
+	return rune;
 }
 
-ali_utf8codepoint* ali_utf8_to_codepoints(AliAllocator allocator, const ali_utf8* utf8, ali_usize* count) {
+ali_rune* ali_utf8_to_runes(AliAllocator allocator, const ali_utf8* utf8, ali_usize* count) {
 	ali_usize len = ali_utf8len(utf8);
 	*count = len;
 
-	ali_utf8codepoint* codepoints = ali_alloc(allocator, len * sizeof(*codepoints));
+	ali_rune* runes = ali_alloc(allocator, len * sizeof(*runes));
 	len = 0;
 	while (*utf8 != 0) {
-        ali_usize codepoint_size = 0;
-        codepoints[len++] = ali_utf8c_to_codepoint(utf8, &codepoint_size);
-        utf8 += codepoint_size;
+        ali_usize rune_size = 0;
+        runes[len++] = ali_utf8c_to_rune(utf8, &rune_size);
+        utf8 += rune_size;
 	}
 
-	return codepoints;
+	return runes;
 }
 
-ali_usize ali_codepoint_size(ali_utf8codepoint codepoint) {
-	if (codepoint > 0x10FFFF) return 0;
-	else if (codepoint > 0xFFFF) return 4;
-	else if (codepoint > 0x07FF) return 3;
-	else if (codepoint > 0x007F) return 2;
+ali_usize ali_rune_size(ali_rune rune) {
+	if (rune > 0x10FFFF) return 0;
+	else if (rune > 0xFFFF) return 4;
+	else if (rune > 0x07FF) return 3;
+	else if (rune > 0x007F) return 2;
 	else return 1;
 }
 
-const ali_utf8* ali_codepoint_to_utf8(ali_utf8codepoint codepoint) {
+const ali_utf8* ali_rune_to_utf8(ali_rune rune) {
 static ali_utf8 utf8[5] = {0};
 	
-	ali_usize codepoint_size = ali_codepoint_size(codepoint);
-	if (codepoint_size == 4) {
-        utf8[0] = 0xF0 | ((codepoint >> 6*3) & 0x07);
-        utf8[1] = 0x80 | ((codepoint >> 6*2) & 0x3F);
-        utf8[2] = 0x80 | ((codepoint >> 6*1) & 0x3F);
-        utf8[3] = 0x80 | ((codepoint >> 6*0) & 0x3F);
-	} else if (codepoint_size == 3) {
-        utf8[0] = 0xE0 | ((codepoint >> 6*2) & 0x0F);
-        utf8[1] = 0x80 | ((codepoint >> 6*1) & 0x3F);
-        utf8[2] = 0x80 | ((codepoint >> 6*0) & 0x3F);
-	} else if (codepoint_size == 2) {
-        utf8[0] = 0xC0 | ((codepoint >> 6*1) & 0x1F);
-        utf8[1] = 0x80 | ((codepoint >> 6*0) & 0x3F);
-	} else if (codepoint_size == 1) {
-        utf8[0] = codepoint;
+	ali_usize rune_size = ali_rune_size(rune);
+	if (rune_size == 4) {
+        utf8[0] = 0xF0 | ((rune >> 6*3) & 0x07);
+        utf8[1] = 0x80 | ((rune >> 6*2) & 0x3F);
+        utf8[2] = 0x80 | ((rune >> 6*1) & 0x3F);
+        utf8[3] = 0x80 | ((rune >> 6*0) & 0x3F);
+	} else if (rune_size == 3) {
+        utf8[0] = 0xE0 | ((rune >> 6*2) & 0x0F);
+        utf8[1] = 0x80 | ((rune >> 6*1) & 0x3F);
+        utf8[2] = 0x80 | ((rune >> 6*0) & 0x3F);
+	} else if (rune_size == 2) {
+        utf8[0] = 0xC0 | ((rune >> 6*1) & 0x1F);
+        utf8[1] = 0x80 | ((rune >> 6*0) & 0x3F);
+	} else if (rune_size == 1) {
+        utf8[0] = rune;
 	} else {
         // invalid
         return NULL;
 	}
-	utf8[codepoint_size] = 0;
+	utf8[rune_size] = 0;
 
 	return utf8;
 }
 
-ali_utf8* ali_codepoints_to_utf8(AliAllocator allocator, ali_utf8codepoint* codepoints, ali_usize len) {
+ali_utf8* ali_runes_to_utf8(AliAllocator allocator, ali_rune* runes, ali_usize len) {
 	ali_usize real_len = 0;
 	for (ali_usize i = 0; i < len; ++i) {
-        real_len += ali_codepoint_size(codepoints[i]);
+        real_len += ali_rune_size(runes[i]);
 	}
 
 	ali_utf8* utf8 = ali_alloc(allocator, real_len + 1);
 	ali_utf8* utf8p = utf8;
 	for (ali_usize i = 0; i < len; ++i) {
-        ali_usize codepoint_size = ali_codepoint_size(codepoints[i]);
-        memcpy(utf8p, ali_codepoint_to_utf8(codepoints[i]), codepoint_size);
-        utf8p += codepoint_size;
+        ali_usize rune_size = ali_rune_size(runes[i]);
+        memcpy(utf8p, ali_rune_to_utf8(runes[i]), rune_size);
+        utf8p += rune_size;
 	}
 	utf8[real_len] = 0;
 
 	return utf8;
 }
 
-ali_utf8codepoint* ali_temp_utf8_to_codepoints(const ali_utf8* utf8, ali_usize* count) {
-	ali_utf8codepoint* codepoints = ali_utf8_to_codepoints(ali_libc_allocator, utf8, count);
-	ali_utf8codepoint* out = ali_temp_alloc(sizeof(*out) * (*count));
-	ali_memcpy(out, codepoints, sizeof(*out) * (*count));
-	ali_free(ali_libc_allocator, codepoints);
+ali_rune* ali_temp_utf8_to_runes(const ali_utf8* utf8, ali_usize* count) {
+	ali_rune* runes = ali_utf8_to_runes(ali_libc_allocator, utf8, count);
+	ali_rune* out = ali_temp_alloc(sizeof(*out) * (*count));
+	ali_memcpy(out, runes, sizeof(*out) * (*count));
+	ali_free(ali_libc_allocator, runes);
 	return out;
 }
 
-ali_utf8* ali_temp_codepoints_to_utf8(ali_utf8codepoint* codepoints, ali_usize len) {
-	ali_utf8* utf8 = ali_codepoints_to_utf8(ali_libc_allocator, codepoints, len);
+ali_utf8* ali_temp_runes_to_utf8(ali_rune* runes, ali_usize len) {
+	ali_utf8* utf8 = ali_runes_to_utf8(ali_libc_allocator, runes, len);
 	ali_utf8* out = (ali_utf8*)ali_temp_strdup((char*)utf8);
 	ali_free(ali_libc_allocator, utf8);
 	return out;
@@ -2174,6 +2176,8 @@ typedef ali_bool bool;
 #define add_u64_checked ali_add_u64_checked
 #define sub_u64_checked ali_sub_u64_checked
 
+#define shift ali_shift
+
 #define path_name ali_path_name
 #define shift_args ali_shift_args
 // @module ali_util end
@@ -2319,21 +2323,21 @@ typedef ali_isize isize;
 
 // @module ali_utf8
 typedef ali_utf8 utf8;
-typedef ali_utf8codepoint utf8codepoint;
+typedef ali_rune rune;
 
 #define UTF8 ALI_UTF8
 
 #define utf8len ali_utf8len
-#define utf8c_to_codepoint ali_utf8c_to_codepoint
-#define utf8_to_codepoints ali_utf8_to_codepoints
+#define utf8c_to_rune ali_utf8c_to_rune
+#define utf8_to_runes ali_utf8_to_runes
 
-#define is_codepoint_valid ali_is_codepoint_valid
-#define codepoint_size ali_codepoint_size
-#define codepoint_to_utf8 ali_codepoint_to_utf8
-#define codepoints_to_utf8 ali_codepoints_to_utf8
+#define is_rune_valid ali_is_rune_valid
+#define rune_size ali_rune_size
+#define rune_to_utf8 ali_rune_to_utf8
+#define runes_to_utf8 ali_runes_to_utf8
 
-#define temp_utf8_to_codepoints ali_temp_utf8_to_codepoints
-#define temp_codepoints_to_utf8 ali_temp_codepoints_to_utf8
+#define temp_utf8_to_runes ali_temp_utf8_to_runes
+#define temp_runes_to_utf8 ali_temp_runes_to_utf8
 // @module ali_utf8 end
 
 // @module ali_sv
