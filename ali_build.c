@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
         if (!flag_parse(&argc, &argv, program)) return 1;
 
         if (force || ali_needs_rebuild1("main", "main.c")) {
-            cmd_append_args(&cmd, "gcc", "-Wall", "-Wextra", "-Werror", "-o", "main", "main.c");
+            cmd_append_args(&cmd, "gcc", "-Wall", "-Wextra", "-Werror", "-ggdb", "-o", "main", "main.c");
             if (!cmd_run_sync_and_reset(cmd)) return 1;
         }
     } else if (sv_eq(sv_from_cstr(subcommand), sv_from_cstr("clean"))) {
