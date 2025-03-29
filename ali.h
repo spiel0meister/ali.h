@@ -72,6 +72,32 @@
 #define ALI_ABORT abort
 #endif // ALI_ABORT
 
+// @module ali_types
+#ifndef ALI_TYPES_
+#define ALI_TYPES_
+#include <stdint.h>
+typedef uint8_t  ali_u8;
+typedef uint16_t ali_u16;
+typedef uint32_t ali_u32;
+typedef uint64_t ali_u64;
+
+typedef int8_t  ali_i8;
+typedef int16_t ali_i16;
+typedef int32_t ali_i32;
+typedef int64_t ali_i64;
+
+typedef float ali_f32;
+
+#ifdef __x86_64__
+typedef double ali_f64;
+#endif // __x86_64__
+
+typedef ali_u64 ali_usize;
+typedef ali_i64 ali_isize;
+#endif // ALI_TYPES_
+
+// @module ali_types end
+
 // @module ali_util
 typedef enum {
     ali_false = 0,
@@ -80,13 +106,19 @@ typedef enum {
 #define false ali_false
 #define true ali_true
 
+typedef struct {
+    const char* file;
+    ali_usize line;
+}AliLocation;
+
+#define ALI_HERE ((AliLocation) { .line = __LINE__, .file = __FILE__ })
+
 #define ALI_TRAP() __builtin_trap()
 #define ALI_BREAKPOINT() ALI_TRAP()
 #define ALI_BREAKPOINT_IF(expr) if (expr) { ALI_TRAP() }
 
 #define ALI_STRINGIFY(x) #x
 #define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
-#define ALI_HERE __FILE__ ":" ALI_STRINGIFY_2(__LINE__)
 
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
@@ -119,37 +151,12 @@ char* ali_shift_args(int* argc, char*** argv);
 
 // @module ali_util end
 
-// @module ali_types
-#ifndef ALI_TYPES_
-#define ALI_TYPES_
-#include <stdint.h>
-typedef uint8_t  ali_u8;
-typedef uint16_t ali_u16;
-typedef uint32_t ali_u32;
-typedef uint64_t ali_u64;
-
-typedef int8_t  ali_i8;
-typedef int16_t ali_i16;
-typedef int32_t ali_i32;
-typedef int64_t ali_i64;
-
-typedef float ali_f32;
-
-#ifdef __x86_64__
-typedef double ali_f64;
-#endif // __x86_64__
-
-typedef ali_u64 ali_usize;
-typedef ali_i64 ali_isize;
-#endif // ALI_TYPES_
-// @module ali_types end
-
 // @module ali_libc_replace
 
 void* ali_memcpy(void* to, const void* from, ali_usize size);
 char* ali_strchr(char* cstr, char c);
 
-void ali__assert(ali_bool ok, const char* expr, const char* loc);
+void ali__assert(ali_bool ok, const char* expr, AliLocation loc);
 #define ali_assert(expr) ali__assert(expr, #expr, ALI_HERE)
 
 // @module ali_libc_replace end
@@ -622,9 +629,9 @@ void* ali_memcpy(void* to, const void* from, ali_usize size) {
     return to;
 }
 
-void ali__assert(ali_bool ok, const char* expr, const char* loc) {
+void ali__assert(ali_bool ok, const char* expr, AliLocation loc) {
     if (!ok) {
-        ali_logn_error("[ASSERT] %s: Assertion failed: %s", loc, expr);
+        ali_logn_error("[ASSERT] %s:%lu: Assertion failed: %s", loc.file, loc.line, expr);
         ALI_TRAP();
     }
 }
@@ -2157,7 +2164,6 @@ typedef ali_bool bool;
 
 #define STRINGIFY ALI_STRINGIFY
 #define STRINGIFY_2 ALI_STRINGIFY_2
-#define HERE ALI_HERE
 
 #define ARRAY_LEN ALI_ARRAY_LEN
 #define INLINE_ARRAY ALI_INLINE_ARRAY
