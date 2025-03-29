@@ -171,8 +171,6 @@ typedef enum {
 extern FILE* ali_global_logfile;
 extern AliLogLevel ali_global_loglevel;
 
-void ali_init_global_log(void);
-
 void ali_log_logn_va(AliLogLevel level, const char* fmt, va_list args);
 void ali_log_log_va(AliLogLevel level, const char* fmt, va_list args);
 
@@ -219,16 +217,17 @@ typedef struct {
     FlagAs as;
 }AliFlag;
 
-const char** ali_flag_string_ex(const char* name, const char* desc, const char* default_, const char** aliases, ali_usize aliases_count);
+#define ali_flag_decl(Type, ali_flag_function_name) \
+    Type* ali_flag_function_name(const char* name, const char* desc, Type default_, const char** aliases, ali_usize alieses_count)
+
+ali_flag_decl(const char*, ali_flag_string_ex);
+ali_flag_decl(ali_u64, ali_flag_u64_ex);
+ali_flag_decl(ali_f64, ali_flag_f64_ex);
+ali_flag_decl(ali_bool, ali_flag_option_ex);
+
 #define ali_flag_string(name, desc, default_) ali_flag_string_ex(name, desc, default_, NULL, 0)
-
-ali_u64* ali_flag_u64_ex(const char* name, const char* desc, ali_u64 default_, const char** aliases, ali_usize aliases_count);
 #define ali_flag_u64(name, desc, default_) ali_flag_u64_ex(name, desc, default_, NULL, 0)
-
-ali_f64* ali_flag_f64_ex(const char* name, const char* desc, ali_f64 default_, const char** aliases, ali_usize aliases_count);
 #define ali_flag_f64(name, desc, default_) ali_flag_f64_ex(name, desc, default_, NULL, 0)
-
-ali_bool* ali_flag_option_ex(const char* name, const char* desc, ali_bool default_, const char** aliases, ali_usize aliases_count);
 #define ali_flag_option(name, desc, default_) ali_flag_option_ex(name, desc, default_, NULL, 0)
 
 void ali_flag_reset(void);
@@ -340,16 +339,12 @@ ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int l
 #endif // ALI_DA_DEFAULT_INIT_CAPACITY
 
 typedef struct {
-    AliAllocator allocator;
-
 	ali_usize count;
 	ali_usize capacity;
 	ali_u8 data[];
 }AliDaHeader;
 
-void* ali_da_create(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
-
-AliDaHeader* ali_da_new_header_with_size(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size);
+AliDaHeader* ali_da_new_header_with_size(ali_usize init_capacity, ali_usize item_size);
 AliDaHeader* ali_da_get_header(void* da);
 void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_size);
 void* ali_da_free(void* da);
@@ -362,8 +357,8 @@ void* ali_da_free(void* da);
 #define ali_da_append(da, item) (ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count++] = item)
 #define ali_da_shallow_append(da, item) (ali_da_maybe_resize(da, 1), (da)[ali_da_get_header(da)->count] = item)
 #define ali_da_append_many(da, items, item_count) do { \
-    ali_da_maybe_resize(da, 1); \
-    memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
+    ali_da_maybe_resize(da, item_count); \
+    ali_memcpy(da + da_getlen(da), items, (item_count) * sizeof(*(da))); \
     ali_da_get_header(da)->count += item_count; \
 } while (0)
 
@@ -1125,9 +1120,8 @@ ali_bool ali_testing__expect(AliTesting* t, ali_bool ok, const char* file, int l
 // @module ali_testing end
 
 // @module ali_da
-void* ali_da_create(AliAllocator allocator, ali_usize init_capacity, ali_usize item_size) {
-    AliDaHeader* header = ali_alloc(allocator, sizeof(*header) + item_size * init_capacity);
-    header->allocator = allocator;
+void* ali_da_new_header(ali_usize init_capacity, ali_usize item_size) {
+    AliDaHeader* header = malloc(sizeof(*header) + item_size * init_capacity);
     header->count = 0;
     header->capacity = init_capacity;
     return header->data;
@@ -1139,16 +1133,17 @@ AliDaHeader* ali_da_get_header(void* da) {
 }
 
 void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_size) {
-    ali_assert(da != NULL);
+    if (da == NULL) {
+        return ali_da_new_header(ALI_DA_DEFAULT_INIT_CAPACITY, item_size);
+    }
     AliDaHeader* h = ali_da_get_header(da);
 
     if (h->count + to_add >= h->capacity) {
-        ali_usize old_capacity = h->capacity;
         while (h->count + to_add >= h->capacity) {
             if (h->capacity == 0) h->capacity = 8;
             else h->capacity *= 8;
         }
-        h = ali_realloc(h->allocator, h, sizeof(*h) + old_capacity * item_size, sizeof(*h) + h->capacity * item_size);
+        h = realloc(h, sizeof(*h) + h->capacity * item_size);
     }
     return h->data;
 }
@@ -1156,7 +1151,7 @@ void* ali_da_maybe_resize_with_size(void* da, ali_usize to_add, ali_usize item_s
 void* ali_da_free(void* da) {
     if (da != NULL) {
         AliDaHeader* h = ali_da_get_header(da);
-        ali_free(h->allocator, h);
+        free(h);
     }
 	return (da = NULL);
 }
