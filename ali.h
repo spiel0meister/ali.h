@@ -117,9 +117,6 @@ typedef struct {
 #define ALI_BREAKPOINT() ALI_TRAP()
 #define ALI_BREAKPOINT_IF(expr) if (expr) { ALI_TRAP() }
 
-#define ALI_STRINGIFY(x) #x
-#define ALI_STRINGIFY_2(x) ALI_STRINGIFY(x)
-
 #define ALI_ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define ALI_INLINE_ARRAY(Type, ...) ( (Type[]) { __VA_ARGS__ } )
 #define ALI_INLINE_ARRAY_WITH_SIZE(Type, ...) (Type[]){ __VA_ARGS__ }, (sizeof((Type[]){ __VA_ARGS__ })/sizeof(Type))
