@@ -291,5 +291,9 @@ typedef ali_usize usize;
 #define arena_create ali_arena_create
 #define arena_allocator ali_arena_allocator
 #define arena_reset ali_arena_reset
+
+#define sv_from_cstr ali_sv_from_cstr
+#define sv_from_parts ali_sv_from_parts
+
 #endif // ALI2_REMOVE_PREFIX_GUARD
 #endif // ALI2_REMOVE_PREFIX
