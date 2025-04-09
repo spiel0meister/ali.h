@@ -14,7 +14,10 @@ typedef struct {
 
 #define ali_trap() __builtin_trap()
 #define ali_here() ((AliLocation) { .file = __FILE__, .line = __LINE__ })
-#define ali_assert(expr) ali_assert_with_loc(expr, #expr, ali_here())
+
+#define ali_assert(expr) ali_assert_with_loc(#expr, expr, ali_here())
+void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
+
 #define ali_static_assert(expr) _Static_assert(expr, #expr)
 
 #define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
@@ -79,6 +82,15 @@ extern AliAllocator ali_libc_allocator;
 #define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, (allocator).user)
 #define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, (allocator).user)
 #define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, (allocator).user)
+
+typedef struct {
+    ali_usize size, capacity;
+    ali_u8* data;
+}AliArena;
+
+AliArena ali_arena_create(ali_usize capacity);
+AliAllocator ali_arena_allocator(AliArena* arena);
+#define ali_arena_reset(arena) (arena)->size = 0
 
 #define DA(Type) Type* items; ali_usize count, capacity
 #define ali_da_append(da, item) do { \
@@ -146,6 +158,55 @@ AliAllocator ali_libc_allocator = {
     .allocator_function = ali__libc_allocator_function,
     .user = NULL,
 };
+
+void* ali__arena_allocator(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+    AliArena* arena = user;
+    switch (action) {
+        case ALI_ALLOC: {
+            ali_assert(arena->size + size < arena->capacity);
+            arena->size += arena->size % alignment;
+            ali_assert(arena->size + size < arena->capacity);
+            void* ptr = arena->data + arena->size;
+            arena->size += size;
+            return ptr;
+        } break;
+        case ALI_REALLOC: {
+            ali_assert(arena->size + size < arena->capacity);
+            arena->size += arena->size % alignment;
+            ali_assert(arena->size + size < arena->capacity);
+            void* ptr = arena->data + arena->size;
+            arena->size += size;
+            memcpy(ptr, old_pointer, old_size);
+            return ptr;
+        } break;
+        case ALI_FREE: {
+            return NULL;
+        } break;
+        case ALI_FREEALL: {
+            free(arena->data);
+            arena->size = 0;
+            arena->capacity = 0;
+            return NULL;
+        } break;
+    }
+
+    ali_unreachable();
+}
+
+AliArena ali_arena_create(ali_usize capacity) {
+    return (AliArena) {
+        .data = malloc(capacity),
+        .size = 0,
+        .capacity = capacity,
+    };
+}
+
+AliAllocator ali_arena_allocator(AliArena* arena) {
+    return (AliAllocator) {
+        .allocator_function = ali__arena_allocator,
+        .user = arena,
+    };
+}
 
 void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
     if (!ok) {
@@ -227,5 +288,8 @@ typedef ali_usize usize;
 #define da_free ali_da_free
 #define da_foreach ali_da_foreach
 
+#define arena_create ali_arena_create
+#define arena_allocator ali_arena_allocator
+#define arena_reset ali_arena_reset
 #endif // ALI2_REMOVE_PREFIX_GUARD
 #endif // ALI2_REMOVE_PREFIX
