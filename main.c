@@ -4,7 +4,10 @@
 #define ALI2_REMOVE_PREFIX
 #include "ali2.h"
 
+typedef struct {
+    DA(int);
+}Nums;
+
 int main(void) {
-    log_info(&ali_libc_logger, "Hello, World!\n");
     return 0;
 }

@@ -2,8 +2,19 @@
 #define ALI2_H
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 #include <stdint.h>
 
+typedef struct {
+    const char* file;
+    int line;
+}AliLocation;
+
+#define ali_trap() __builtin_trap()
+#define ali_here() ((AliLocation) { .file = __FILE__, .line = __LINE__ })
+#define ali_assert(expr) ali_assert_with_loc(expr, #expr, ali_here())
 #define ali_static_assert(expr) _Static_assert(expr, #expr)
 
 #ifndef ALI_TYPE_ALIASES
@@ -45,10 +56,46 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn(logger, ...) ali_log_log(logger, LOG_WARN, __VA_ARGS__)
 #define ali_log_error(logger, ...) ali_log_log(logger, LOG_ERROR, __VA_ARGS__)
 
+#define DA(Type) Type* items; size_t count, capacity
+#define ali_da_append(da, item) do { \
+        if ((da)->count >= (da)->capacity) { \
+            if ((da)->capacity == 0) (da)->capacity = 8; \
+            while ((da)->count >= (da)->capacity) (da)->capacity *= 3; \
+            (da)->items = realloc((da)->items, (da)->capacity * sizeof((da)->items[0])); \
+        } \
+        (da)->items[(da)->count++] = (item); \
+    } while (0)
+#define ali_da_append_many(da, items, item_count) do { \
+        if ((da)->count + (item_count) >= (da)->capacity) { \
+            if ((da)->capacity == 0) (da)->capacity = 8; \
+            while ((da)->count + (item_count) >= (da)->capacity) (da)->capacity *= 3; \
+            (da)->items = realloc((da)->items, (da)->capacity * sizeof((da)->items[0])); \
+        } \
+        memcpy((da)->items + (da)->count, items, (item_count) * sizeof((da)->items[0])); \
+        (da)->count += item_count; \
+    } while (0)
+#define ali_da_remove_unordered(da, i) (ali_assert(i < (da)->count), (da)->items[i] = (da)->items[--(da)->count])
+#define ali_da_remove_ordered(da, i) do { \
+        ali_assert((da)->count > 0); \
+        ali_assert(i < (da)->count); \
+        memmove((da)->items + (i), (da)->items + (i) + 1, ((da)->count - (i)) * sizeof((da)->items[0])); \
+        (da)->count--; \
+    } while (0)
+#define ali_da_clear(da) (da)->count = 0
+#define ali_da_free(da) (free((da)->items), (da)->items = NULL, (da)->capacity = 0, (da)->count = 0)
+#define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; ptr < (da)->items + (da)->count; ++ptr)
+
 #endif // ALI2_H
 
 #ifdef ALI2_IMPLEMENTATION
 #include <stdarg.h>
+
+void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
+    if (!ok) {
+        ali_log_error(&ali_libc_logger, "%s:%d: Assertion failed: %s", loc.file, loc.line, expr);
+        ali_trap();
+    }
+}
 
 AliLogger ali_libc_logger = {
     .level = LOG_INFO,
@@ -100,6 +147,14 @@ typedef ali_usize usize;
 #define log_info ali_log_info
 #define log_warn ali_log_warn
 #define log_error ali_log_error
+
+#define da_append ali_da_append
+#define da_append_many ali_da_append_many
+#define da_remove_unordered ali_da_remove_unordered
+#define da_remove_ordered ali_da_remove_ordered
+#define da_clear ali_da_clear
+#define da_free ali_da_free
+#define da_foreach ali_da_foreach
 
 #endif // ALI2_REMOVE_PREFIX_GUARD
 #endif // ALI2_REMOVE_PREFIX
