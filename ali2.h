@@ -59,7 +59,28 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn(logger, ...) ali_log_log(logger, LOG_WARN, __VA_ARGS__)
 #define ali_log_error(logger, ...) ali_log_log(logger, LOG_ERROR, __VA_ARGS__)
 
-#define DA(Type) Type* items; size_t count, capacity
+typedef enum {
+    ALI_ALLOC,
+    ALI_REALLOC,
+    ALI_FREE,
+    ALI_FREEALL,
+}AliAllocatorAction;
+
+typedef struct {
+    void* (*allocator_function)(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user);
+    void* user;
+}AliAllocator;
+
+extern AliAllocator ali_libc_allocator;
+
+#define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, (allocator).user)
+#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8)
+#define ali_realloc_aligned(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, (allocator).user)
+#define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, (allocator).user)
+#define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, (allocator).user)
+#define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, (allocator).user)
+
+#define DA(Type) Type* items; ali_usize count, capacity
 #define ali_da_append(da, item) do { \
         if ((da)->count >= (da)->capacity) { \
             if ((da)->capacity == 0) (da)->capacity = 8; \
