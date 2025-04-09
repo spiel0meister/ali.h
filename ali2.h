@@ -17,6 +17,9 @@ typedef struct {
 #define ali_assert(expr) ali_assert_with_loc(expr, #expr, ali_here())
 #define ali_static_assert(expr) _Static_assert(expr, #expr)
 
+#define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
+#define ali_unused(thing) (void)(thing)
+
 #ifndef ALI_TYPE_ALIASES
 #define ALI_TYPE_ALIASES
 
@@ -85,10 +88,43 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...);
 #define ali_da_free(da) (free((da)->items), (da)->items = NULL, (da)->capacity = 0, (da)->count = 0)
 #define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; ptr < (da)->items + (da)->count; ++ptr)
 
+typedef struct {
+    const char* start;
+    size_t len;
+}AliSv;
+#define SV(static_cstr) ((AliSv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
+
+AliSv ali_sv_from_cstr(const char* cstr);
+AliSv ali_sv_from_parts(const char* start, ali_usize len);
+
 #endif // ALI2_H
 
 #ifdef ALI2_IMPLEMENTATION
 #include <stdarg.h>
+
+void* ali__libc_allocator_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+    ali_unused(user);
+    ali_unused(old_size);
+    ali_unused(alignment);
+    switch (action) {
+        case ALI_ALLOC:
+            return malloc(size);
+        case ALI_REALLOC:
+            return realloc(old_pointer, size);
+        case ALI_FREE:
+            free(old_pointer);
+            return NULL;
+        case ALI_FREEALL:
+            return NULL;
+    }
+    
+    ali_unreachable();
+}
+
+AliAllocator ali_libc_allocator = {
+    .allocator_function = ali__libc_allocator_function,
+    .user = NULL,
+};
 
 void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
     if (!ok) {
@@ -121,6 +157,20 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...) {
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
+}
+
+AliSv ali_sv_from_cstr(const char* cstr) {
+    AliSv sv = {0};
+    sv.start = cstr;
+    sv.len = strlen(cstr);
+    return sv;
+}
+
+AliSv ali_sv_from_parts(const char* start, ali_usize len) {
+    return (AliSv) {
+        .start = start,
+        .len = len,
+    };
 }
 
 #endif // ALI_IMPLEMENTATION
