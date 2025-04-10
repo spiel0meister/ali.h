@@ -77,7 +77,7 @@ typedef struct {
 extern AliAllocator ali_libc_allocator;
 
 #define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, (allocator).user)
-#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8)
+#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, (allocator).user)
 #define ali_realloc_aligned(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, (allocator).user)
 #define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, (allocator).user)
 #define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, (allocator).user)
@@ -93,20 +93,23 @@ AliAllocator ali_arena_allocator(AliArena* arena);
 #define ali_arena_reset(arena) (arena)->size = 0
 
 #define DA(Type) Type* items; ali_usize count, capacity
-#define ali_da_append(da, item) do { \
-        if ((da)->count >= (da)->capacity) { \
-            if ((da)->capacity == 0) (da)->capacity = 8; \
-            while ((da)->count >= (da)->capacity) (da)->capacity *= 3; \
-            (da)->items = realloc((da)->items, (da)->capacity * sizeof((da)->items[0])); \
-        } \
-        (da)->items[(da)->count++] = (item); \
-    } while (0)
-#define ali_da_append_many(da, items, item_count) do { \
+#define ali_da_resize_for(da, item_count) do {\
         if ((da)->count + (item_count) >= (da)->capacity) { \
             if ((da)->capacity == 0) (da)->capacity = 8; \
             while ((da)->count + (item_count) >= (da)->capacity) (da)->capacity *= 3; \
             (da)->items = realloc((da)->items, (da)->capacity * sizeof((da)->items[0])); \
         } \
+    } while (0)
+#define ali_da_append(da, item) do { \
+        ali_da_resize_for(da, 1); \
+        (da)->items[(da)->count++] = (item); \
+    } while (0)
+#define ali_da_shallow_append(da, item) do { \
+        ali_da_resize_for(da, 1); \
+        (da)->items[(da)->count] = (item); \
+    } while (0)
+#define ali_da_append_many(da, items, item_count) do { \
+        ali_da_resize_for(da, item_count); \
         memcpy((da)->items + (da)->count, items, (item_count) * sizeof((da)->items[0])); \
         (da)->count += item_count; \
     } while (0)
@@ -129,6 +132,14 @@ typedef struct {
 
 AliSv ali_sv_from_cstr(const char* cstr);
 AliSv ali_sv_from_parts(const char* start, ali_usize len);
+
+typedef struct {
+    DA(char);
+}AliSb;
+
+AliSv ali_sb_to_sv(AliSb* sb);
+void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
+char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
 
 #endif // ALI2_H
 
@@ -241,6 +252,32 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...) {
     va_end(args);
 }
 
+AliSv ali_sb_to_sv(AliSb* sb) {
+    return ali_sv_from_parts(sb->items, sb->count);
+}
+
+void ali_sb_sprintf(AliSb* sb, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int n = snprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    ali_da_resize_for(sb, n);
+
+    va_start(args, fmt);
+    int n_ = snprintf(sb->items + sb->count, n + 1, fmt, args);
+    va_end(args);
+
+    sb->count += n;
+}
+
+char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator) {
+    char* copy = ali_alloc(allocator, sb->count + 1);
+    memcpy(copy, sb->items, sb->count);
+    copy[sb->count] = 0;
+    return copy;
+}
+
 AliSv ali_sv_from_cstr(const char* cstr) {
     AliSv sv = {0};
     sv.start = cstr;
@@ -280,7 +317,9 @@ typedef ali_usize usize;
 #define log_warn ali_log_warn
 #define log_error ali_log_error
 
+#define da_resize_for ali_da_resize_for
 #define da_append ali_da_append
+#define da_shallow_append ali_da_shallow_append
 #define da_append_many ali_da_append_many
 #define da_remove_unordered ali_da_remove_unordered
 #define da_remove_ordered ali_da_remove_ordered
@@ -291,6 +330,10 @@ typedef ali_usize usize;
 #define arena_create ali_arena_create
 #define arena_allocator ali_arena_allocator
 #define arena_reset ali_arena_reset
+
+#define sb_to_sv ali_sb_to_sv
+#define sb_to_cstr ali_sb_to_cstr
+#define sb_sprintf ali_sb_sprintf
 
 #define sv_from_cstr ali_sv_from_cstr
 #define sv_from_parts ali_sv_from_parts
