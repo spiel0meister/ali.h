@@ -266,6 +266,7 @@ void ali_sb_sprintf(AliSb* sb, const char* fmt, ...) {
 
     va_start(args, fmt);
     int n_ = snprintf(sb->items + sb->count, n + 1, fmt, args);
+    ali_unused(n_);
     va_end(args);
 
     sb->count += n;
