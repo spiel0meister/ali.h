@@ -41,6 +41,8 @@ typedef ali_u64 ali_usize;
 
 #endif // ALI_TYPE_ALIASES
 
+char* ali_libc_get_error(void);
+
 typedef enum {
     LOG_DEBUG = 0,
     LOG_INFO,
@@ -141,10 +143,41 @@ AliSv ali_sb_to_sv(AliSb* sb);
 void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
 char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
 
+#ifdef _WIN32
+typedef HANDLE AliJobHandle;
+#else // _WIN32
+typedef pid_t AliJobHandle;
+#endif // _WIN32
+
+typedef struct {
+    AliJobHandle handle;
+    int in[2];
+    int out[2];
+}AliJob;
+
+typedef ali_u32 AliJobRedirect;
+#define ALI_REDIRECT_STDOUT 0x1
+#define ALI_REDIRECT_STDIN 0x2
+#define ALI_REDIRECT_STDERR 0x4
+
+#ifndef _WIN32
+bool ali_pipe2(int p[2]);
+#endif // _WIN32
+
+AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
+bool ali_job_wait(AliJob job);
+bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
+
 #endif // ALI2_H
 
 #ifdef ALI2_IMPLEMENTATION
 #include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+
+char* ali_libc_get_error(void) {
+    return strerror(errno);
+}
 
 void* ali__libc_allocator_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
     ali_unused(user);
@@ -291,6 +324,113 @@ AliSv ali_sv_from_parts(const char* start, ali_usize len) {
         .start = start,
         .len = len,
     };
+}
+
+#ifndef _WIN32
+bool ali_pipe2(int p[2]) {
+    if (pipe(p) < 0) {
+        ali_log_error(&ali_libc_logger, "Couldn't create pipe: %s\n", ali_libc_get_error());
+        return false;
+    }
+    return true;
+}
+#endif // _WIN32
+
+AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
+    AliJob job = {0};
+    job.handle = -1;
+
+    bool should_redirect_stdin = (redirect & ALI_REDIRECT_STDIN) != 0;
+    bool should_redirect_stdout = (redirect & ALI_REDIRECT_STDOUT) != 0;
+    bool should_redirect_stderr = (redirect & ALI_REDIRECT_STDERR) != 0;
+
+    if (should_redirect_stdout || should_redirect_stderr) {
+        if (ali_pipe2(job.out)) return job;
+    }
+
+    if (should_redirect_stdin) {
+        if (ali_pipe2(job.in)) return job;
+    }
+
+    char** cmd_copy = ali_alloc(ali_libc_allocator, sizeof(cmd[0]) * (cmd_count + 1));
+    memcpy(cmd_copy, cmd, sizeof(cmd[0]) * cmd_count);
+    cmd_copy[cmd_count] = NULL;
+
+    job.handle = fork();
+    if (job.handle < 0) {
+        ali_log_error(&ali_libc_logger, "Couldn't start process: %d\n", job.handle);
+        return job;
+    } else if (job.handle == 0) {
+        if (should_redirect_stdin) {
+            dup2(STDIN_FILENO, job.in[0]);
+            close(job.in[1]);
+        }
+
+        if (should_redirect_stdout) {
+            dup2(STDOUT_FILENO, job.out[1]);
+            close(job.out[0]);
+        }
+
+        if (should_redirect_stderr) {
+            dup2(STDERR_FILENO, job.out[1]);
+            close(job.out[0]);
+        }
+
+        execvp(cmd_copy[0], cmd_copy);
+        ali_log_error(&ali_libc_logger, "Couldn't start program '%s': %s\n", cmd[0], ali_libc_get_error());
+        exit(1);
+    }
+
+    ali_free(ali_libc_allocator, cmd_copy);
+    return job;
+}
+
+bool ali_job_wait_posix(AliJob job) {
+    for (;;) {
+        int wstatus;
+        if (waitpid(job.handle, &wstatus, 0) < 0) {
+            ali_log_error(&ali_libc_logger, "Couldn't wait for process: %s\n", ali_libc_get_error());
+            return false;
+        }
+
+        if (WIFEXITED(wstatus)) {
+            int estatus = WEXITSTATUS(wstatus);
+            if (estatus != 0) {
+                ali_log_error(&ali_libc_logger, "Process exited with status %d\n", estatus);
+                return false;
+            }
+
+            break; 
+        }
+
+        if (WIFSIGNALED(wstatus)) {
+            ali_log_error(&ali_libc_logger, "Process exited with signal %d\n", WTERMSIG(wstatus));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
+#ifdef _WIN32
+#error "TODO: windows"
+#else // _WIN32
+    return ali_job_start_posix(cmd, cmd_count, redirect);
+#endif // _WIN32
+}
+
+bool ali_job_wait(AliJob job) {
+#ifdef _WIN32
+#error "TODO: windows"
+#else // _WIN32
+    return ali_job_wait_posix(job);
+#endif // _WIN32
+}
+
+bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
+    AliJob job = ali_job_start(cmd, cmd_count, redirect);
+    return ali_job_wait(job);
 }
 
 #endif // ALI_IMPLEMENTATION
