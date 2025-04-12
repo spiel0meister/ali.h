@@ -338,6 +338,18 @@ AliSv ali_sv_from_parts(const char* start, ali_usize len) {
     };
 }
 
+void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count) {
+    for (ali_usize i = 0; i < cmd_count; ++i) {
+        if (i != 0) ali_da_append(sb, ' ');
+        if (strchr(cmd[i], ' ') == NULL) {
+            int len = strlen(cmd[i]);
+            ali_da_append_many(sb, cmd[i], len);
+        } else {
+            ali_sb_sprintf(sb, "'%s'", cmd[i]);
+        }
+    }
+}
+
 #ifndef _WIN32
 bool ali_pipe2(int p[2]) {
     if (pipe(p) < 0) {
