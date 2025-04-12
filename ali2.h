@@ -541,6 +541,10 @@ typedef ali_usize usize;
 
 #define sv_from_cstr ali_sv_from_cstr
 #define sv_from_parts ali_sv_from_parts
+#define sv_strip_prefix ali_sv_strip_prefix
+#define sv_strip_suffix ali_sv_strip_suffix
+#define sv_starts_with_prefix ali_sv_starts_with_prefix
+#define sv_ends_with_suffix ali_sv_ends_with_suffix
 
 #define job_start ali_job_start
 #define job_wait ali_job_wait
