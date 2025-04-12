@@ -23,6 +23,8 @@ void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
 #define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unused(thing) (void)(thing)
 
+#define ali_array_len(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 #ifndef ALI_TYPE_ALIASES
 #define ALI_TYPE_ALIASES
 
@@ -58,6 +60,7 @@ typedef struct {
 
 extern AliLogger ali_libc_logger;
 
+__attribute__((__format__(printf, 3, 4)))
 void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...);
 #define ali_log_debug(logger, ...) ali_log_log(logger, LOG_DEBUG, __VA_ARGS__)
 #define ali_log_info(logger, ...) ali_log_log(logger, LOG_INFO, __VA_ARGS__)
@@ -140,6 +143,7 @@ typedef struct {
 }AliSb;
 
 AliSv ali_sb_to_sv(AliSb* sb);
+__attribute__((__format__(printf, 2, 3)))
 void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
 char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
 void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count);
@@ -300,13 +304,13 @@ AliSv ali_sb_to_sv(AliSb* sb) {
 void ali_sb_sprintf(AliSb* sb, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    int n = snprintf(NULL, 0, fmt, args);
+    int n = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
 
     ali_da_resize_for(sb, n);
 
     va_start(args, fmt);
-    int n_ = snprintf(sb->items + sb->count, n + 1, fmt, args);
+    int n_ = vsnprintf(sb->items + sb->count, n + 1, fmt, args);
     ali_unused(n_);
     va_end(args);
 
