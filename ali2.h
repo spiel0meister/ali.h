@@ -110,9 +110,9 @@ AliAllocator ali_arena_allocator(AliArena* arena);
         ali_da_resize_for(da, 1); \
         (da)->items[(da)->count] = (item); \
     } while (0)
-#define ali_da_append_many(da, items, item_count) do { \
+#define ali_da_append_many(da, items_, item_count) do { \
         ali_da_resize_for(da, item_count); \
-        memcpy((da)->items + (da)->count, items, (item_count) * sizeof((da)->items[0])); \
+        memcpy((da)->items + (da)->count, items_, (item_count) * sizeof((da)->items[0])); \
         (da)->count += item_count; \
     } while (0)
 #define ali_da_remove_unordered(da, i) (ali_assert(i < (da)->count), (da)->items[i] = (da)->items[--(da)->count])
@@ -142,6 +142,7 @@ typedef struct {
 AliSv ali_sb_to_sv(AliSb* sb);
 void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
 char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
+void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count);
 
 #ifdef _WIN32
 typedef HANDLE AliJobHandle;
