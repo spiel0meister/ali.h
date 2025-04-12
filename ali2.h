@@ -134,9 +134,16 @@ typedef struct {
     size_t len;
 }AliSv;
 #define SV(static_cstr) ((AliSv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
+#define SV_FMT "%.*s"
+#define SV_F(sv) (int)(sv).count, (sv).items
 
 AliSv ali_sv_from_cstr(const char* cstr);
 AliSv ali_sv_from_parts(const char* start, ali_usize len);
+
+bool ali_sv_starts_with_prefix(AliSv self, AliSv prefix);
+AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix);
+bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix);
+AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix);
 
 typedef struct {
     DA(char);
@@ -337,6 +344,36 @@ AliSv ali_sv_from_parts(const char* start, ali_usize len) {
         .len = len,
     };
 }
+
+bool ali_sv_starts_with_prefix(AliSv self, AliSv prefix) {
+    if (self.len < prefix.len) return false;
+    for (ali_usize i = 0; i < prefix.len; ++i) {
+        if (self.start[i] != prefix.start[i]) return false;
+    }
+    return true;
+}
+
+AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix) {
+    if (!ali_sv_starts_with_prefix(self, prefix)) return self;
+    self.len -= prefix.len; 
+    self.start += prefix.len; 
+    return self;
+}
+
+bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix) {
+    if (self.len < suffix.len) return false;
+    for (ali_usize i = 0; i < suffix.len; ++i) {
+        if (self.start[self.len - 1 - i] != suffix.start[suffix.len - 1 - i]) return false;
+    }
+    return true;
+}
+
+AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix) {
+    if (!ali_sv_ends_with_suffix(self, suffix)) return self;
+    self.len -= suffix.len;
+    return self;
+}
+
 
 void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count) {
     for (ali_usize i = 0; i < cmd_count; ++i) {
