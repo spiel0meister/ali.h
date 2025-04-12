@@ -175,6 +175,13 @@ bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 #include <string.h>
 #include <errno.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/wait.h>
+#else // _WIN32
+#include <windows.h>
+#endif // _WIN32
+
 char* ali_libc_get_error(void) {
     return strerror(errno);
 }
@@ -452,6 +459,8 @@ typedef ali_u64 u64;
 typedef ali_isize isize;
 typedef ali_usize usize;
 
+#define libc_get_error ali_libc_get_error
+
 #define log_log ali_log_log
 #define log_debug ali_log_debug
 #define log_info ali_log_info
@@ -478,6 +487,10 @@ typedef ali_usize usize;
 
 #define sv_from_cstr ali_sv_from_cstr
 #define sv_from_parts ali_sv_from_parts
+
+#define job_start ali_job_start
+#define job_wait ali_job_wait
+#define job_run ali_job_run
 
 #endif // ALI2_REMOVE_PREFIX_GUARD
 #endif // ALI2_REMOVE_PREFIX
