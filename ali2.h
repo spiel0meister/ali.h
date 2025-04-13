@@ -180,6 +180,15 @@ AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(AliJob job);
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 
+typedef struct {
+    DA(char*);
+}AliCmd;
+
+AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect);
+bool ali_cmd_run_sync(AliCmd cmd);
+AliJob ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
+bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
+
 #endif // ALI2_H
 
 #ifdef ALI2_IMPLEMENTATION
@@ -491,6 +500,26 @@ bool ali_job_wait(AliJob job) {
 
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
     AliJob job = ali_job_start(cmd, cmd_count, redirect);
+    return ali_job_wait(job);
+}
+
+AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect) {
+    AliJob job = ali_job_start(cmd.items, cmd.count, redirect);
+    return job;
+}
+
+bool ali_cmd_run_sync(AliCmd cmd) {
+    return ali_job_run(cmd.items, cmd.count, 0);
+}
+
+AliJob ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect) {
+    AliJob job = ali_job_start(cmd->items, cmd->count, redirect);
+    cmd->count = 0;
+    return job;
+}
+
+bool ali_cmd_run_sync_and_reset(AliCmd* cmd) {
+    AliJob job = ali_cmd_run_async_and_reset(cmd, 0);
     return ali_job_wait(job);
 }
 
