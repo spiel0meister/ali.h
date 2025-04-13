@@ -176,6 +176,7 @@ typedef ali_u32 AliJobRedirect;
 bool ali_pipe2(int p[2]);
 #endif // _WIN32
 
+bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepath2);
 bool ali_rename(const char* from, const char* to);
 bool ali_remove(const char* filepath);
 bool ali_mkdir_if_not_exists(const char* path);
@@ -410,6 +411,22 @@ bool ali_pipe2(int p[2]) {
     return true;
 }
 #endif // _WIN32
+
+bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepath2) {
+    struct stat st;
+
+    if (stat(filepath1, &st) < 0) {
+        ali_log_error(&ali_libc_logger, "Couldn't stat %s: %s\n", filepath1, ali_libc_get_error());
+        return false;
+    }
+
+    time_t file1_time = st.st_mtim.tv_sec;
+    if (stat(filepath2, &st) < 0) {
+        return true;
+    }
+
+    return file1_time > st.st_mtim.tv_sec;
+}
 
 bool ali_rename(const char* from, const char* to) {
     if (rename(from, to) < 0) {
