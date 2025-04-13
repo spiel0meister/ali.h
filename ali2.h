@@ -176,6 +176,9 @@ typedef ali_u32 AliJobRedirect;
 bool ali_pipe2(int p[2]);
 #endif // _WIN32
 
+bool ali_rename(const char* from, const char* to);
+bool ali_remove(const char* filepath);
+
 AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(AliJob job);
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
@@ -405,6 +408,22 @@ bool ali_pipe2(int p[2]) {
     return true;
 }
 #endif // _WIN32
+
+bool ali_rename(const char* from, const char* to) {
+    if (rename(from, to) < 0) {
+        ali_log_error(&ali_libc_logger, "Couldn't rename %s to %s: %s\n", from, to, ali_libc_get_error());
+        return false;
+    }
+    return true;
+}
+
+bool ali_remove(const char* filepath) {
+    if (remove(filepath) < 0) {
+        ali_log_error(&ali_libc_logger, "Couldn't remove %s: %s\n", filepath, ali_libc_get_error());
+        return false;
+    }
+    return true;
+}
 
 AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
     AliJob job = {0};
