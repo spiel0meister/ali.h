@@ -212,10 +212,27 @@ typedef struct {
     DA(char*);
 }AliCmd;
 
+#define ali_cmd_append ali_da_append
+void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...);
+#define ali_cmd_append_many(cmd, ...) ali_cmd_append_many_null(cmd, __VA_ARGS__, NULL)
 AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync(AliCmd cmd);
 AliJob ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
+
+#define ALI_REBUILD_YOURSELF(cmd, argc, argv) do { \
+        ali_usize tstamp = ali_tstamp(); \
+        const char* program = (argv)[0]; \
+        const char* old_program = ali_tsprintf("%s.old", program); \
+        const char* source = __FILE__; \
+        if (ali_need_rebuild(program, source)) { \
+            if (!ali_rename(program, old_program)) return 1; \
+            ali_cmd_append_many(cmd, "gcc", "-o", program, source); \
+            if (!ali_cmd_run_sync_and_reset(cmd)) return 1; \
+            if (!ali_remove(old_program)) return 1; \
+        } \
+        ali_trewind(tstamp); \
+    } while (0)
 
 #endif // ALI2_H
 
@@ -227,6 +244,7 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 #ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #else // _WIN32
 #include <windows.h>
 #endif // _WIN32
@@ -277,11 +295,11 @@ char* ali_tsprintf(const char* fmt, ...) {
     va_end(args);
 
     va_start(args, fmt);
-    int n_ = vsnprintf(sb->items + sb->count, n + 1, fmt, args);
+    int n_ = vsnprintf(buffer + buffer_size, n + 1, fmt, args);
     ali_unused(n_);
     va_end(args);
 
-    asset(buffer_size + n < ALI_TEMPBUF_SIZE);
+    ali_assert(buffer_size + n < ALI_TEMPBUF_SIZE);
     buffer_size += n;
 }
 
@@ -620,6 +638,19 @@ bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
     return ali_job_wait(job);
 }
 
+void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...) {
+    ali_cmd_append(cmd, arg1);
+
+    va_list args;
+    va_start(args, arg1);
+    char* arg = va_arg(args, char*);
+    while (arg != NULL) {
+        ali_cmd_append(cmd, arg);
+        arg = va_arg(args, char*);
+    }
+    va_end(args);
+}
+
 AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect) {
     AliJob job = ali_job_start(cmd.items, cmd.count, redirect);
     return job;
@@ -695,6 +726,13 @@ typedef ali_usize usize;
 #define job_start ali_job_start
 #define job_wait ali_job_wait
 #define job_run ali_job_run
+
+#define cmd_append ali_cmd_append
+#define cmd_append_many ali_cmd_append_many
+#define cmd_run_async ali_cmd_run_async
+#define cmd_run_sync ali_cmd_run_sync
+#define cmd_run_async_and_reset ali_cmd_run_async_and_reset
+#define cmd_run_sync_and_reset ali_cmd_run_sync_and_reset
 
 #endif // ALI2_REMOVE_PREFIX_GUARD
 #endif // ALI2_REMOVE_PREFIX
