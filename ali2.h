@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdint.h>
 
+// macros
 typedef struct {
     const char* file;
     int line;
@@ -43,8 +44,10 @@ typedef ali_u64 ali_usize;
 
 #endif // ALI_TYPE_ALIASES
 
+// general
 char* ali_libc_get_error(void);
 
+// logging
 typedef enum {
     LOG_DEBUG = 0,
     LOG_INFO,
@@ -67,6 +70,7 @@ void ali_log_log(AliLogger* logger, AliLogLevel level, const char* fmt, ...);
 #define ali_log_warn(logger, ...) ali_log_log(logger, LOG_WARN, __VA_ARGS__)
 #define ali_log_error(logger, ...) ali_log_log(logger, LOG_ERROR, __VA_ARGS__)
 
+// allocator
 typedef enum {
     ALI_ALLOC,
     ALI_REALLOC,
@@ -88,6 +92,18 @@ extern AliAllocator ali_libc_allocator;
 #define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, (allocator).user)
 #define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, (allocator).user)
 
+// temporary buffer
+
+#ifndef ALI_TEMPBUF_SIZE
+#define ALI_TEMPBUF_SIZE (4 << 10)
+#endif // ALI_TEMPBUF_SIZE
+
+ali_usize ali_tstamp(void);
+void ali_trewind(ali_usize stamp);
+__attribute__((__format__(printf, 1, 2)))
+char* ali_tsprintf(const char* fmt, ...);
+
+// arena
 typedef struct {
     ali_usize size, capacity;
     ali_u8* data;
@@ -97,6 +113,7 @@ AliArena ali_arena_create(ali_usize capacity);
 AliAllocator ali_arena_allocator(AliArena* arena);
 #define ali_arena_reset(arena) (arena)->size = 0
 
+// dynamic arrays (da)
 #define DA(Type) Type* items; ali_usize count, capacity
 #define ali_da_resize_for(da, item_count) do {\
         if ((da)->count + (item_count) >= (da)->capacity) { \
@@ -129,6 +146,7 @@ AliAllocator ali_arena_allocator(AliArena* arena);
 #define ali_da_free(da) (free((da)->items), (da)->items = NULL, (da)->capacity = 0, (da)->count = 0)
 #define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; ptr < (da)->items + (da)->count; ++ptr)
 
+// string view (sv)
 typedef struct {
     const char* start;
     size_t len;
@@ -145,6 +163,7 @@ AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix);
 bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix);
 AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix);
 
+// string builder (sb)
 typedef struct {
     DA(char);
 }AliSb;
@@ -155,6 +174,19 @@ void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
 char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
 void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count);
 
+// doing stuff with filesystem
+#ifndef _WIN32
+bool ali_pipe2(int p[2]);
+#endif // _WIN32
+
+bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepath2);
+#define ali_need_rebuild(target, source) ali_is_file1_modified_after_file2(source, target)
+bool ali_rename(const char* from, const char* to);
+bool ali_remove(const char* filepath);
+bool ali_mkdir_if_not_exists(const char* path);
+bool ali_mkdir_deep_if_not_exists(const char* path);
+
+// jobs
 #ifdef _WIN32
 typedef HANDLE AliJobHandle;
 #else // _WIN32
@@ -171,16 +203,6 @@ typedef ali_u32 AliJobRedirect;
 #define ALI_REDIRECT_STDOUT 0x1
 #define ALI_REDIRECT_STDIN 0x2
 #define ALI_REDIRECT_STDERR 0x4
-
-#ifndef _WIN32
-bool ali_pipe2(int p[2]);
-#endif // _WIN32
-
-bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepath2);
-bool ali_rename(const char* from, const char* to);
-bool ali_remove(const char* filepath);
-bool ali_mkdir_if_not_exists(const char* path);
-bool ali_mkdir_deep_if_not_exists(const char* path);
 
 AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(AliJob job);
@@ -236,6 +258,32 @@ AliAllocator ali_libc_allocator = {
     .allocator_function = ali__libc_allocator_function,
     .user = NULL,
 };
+
+static char buffer[ALI_TEMPBUF_SIZE];
+static ali_usize buffer_size = 0;
+
+ali_usize ali_tstamp(void) {
+    return buffer_size;
+}
+
+void ali_trewind(ali_usize stamp) {
+    buffer_size = stamp;
+}
+
+char* ali_tsprintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    va_start(args, fmt);
+    int n_ = vsnprintf(sb->items + sb->count, n + 1, fmt, args);
+    ali_unused(n_);
+    va_end(args);
+
+    asset(buffer_size + n < ALI_TEMPBUF_SIZE);
+    buffer_size += n;
+}
 
 void* ali__arena_allocator(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
     AliArena* arena = user;
