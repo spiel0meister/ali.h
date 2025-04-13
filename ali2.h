@@ -727,6 +727,11 @@ typedef ali_usize usize;
 #define job_wait ali_job_wait
 #define job_run ali_job_run
 
+#define is_file1_modified_after_file2 ali_is_file1_modified_after_file2
+#define need_rebuild ali_need_rebuild
+#define mkdir_if_not_exists ali_mkdir_if_not_exists
+#define mkdir_deep_if_not_exists ali_mkdir_deep_if_not_exists
+
 #define cmd_append ali_cmd_append
 #define cmd_append_many ali_cmd_append_many
 #define cmd_run_async ali_cmd_run_async
