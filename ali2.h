@@ -178,6 +178,8 @@ bool ali_pipe2(int p[2]);
 
 bool ali_rename(const char* from, const char* to);
 bool ali_remove(const char* filepath);
+bool ali_mkdir_if_not_exists(const char* path);
+bool ali_mkdir_deep_if_not_exists(const char* path);
 
 AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(AliJob job);
@@ -422,6 +424,37 @@ bool ali_remove(const char* filepath) {
         ali_log_error(&ali_libc_logger, "Couldn't remove %s: %s\n", filepath, ali_libc_get_error());
         return false;
     }
+    return true;
+}
+
+bool ali_mkdir_if_not_exists(const char* path) {
+    if (mkdir(path, 0775) < 0) {
+        switch (errno) {
+            case EEXIST:
+                ali_log_info(&ali_libc_logger, "Directory %s already exists\n", path);
+                break; // ignore
+            default:
+                ali_log_error(&ali_libc_logger, "Couldn't create directory: %s\n", ali_libc_get_error());
+                return false;
+        }
+    }
+    return true;
+}
+
+bool ali_mkdir_deep_if_not_exists(const char* path) {
+    static char buffer[1024] = {0};
+
+    const char* slash = strchr(path, '/');
+    while (slash != NULL) {
+        memcpy(buffer, path, slash - path);
+        buffer[slash - path] = 0;
+        if (strcmp(buffer, ".") != 0) {
+            if (!ali_mkdir_if_not_exists(buffer)) return false;
+        }
+        slash = strchr(slash + 1, '/');
+    }
+    if (!ali_mkdir_if_not_exists(path)) return false;
+
     return true;
 }
 
