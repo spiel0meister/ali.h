@@ -66,10 +66,46 @@ extern AliLogger ali_libc_logger;
 
 __attribute__((__format__(printf, 2, 3)))
 void ali_log_log(AliLogLevel level, const char* fmt, ...);
-#define ali_log_debug(fmt, ...) ali_log_log(LOG_DEBUG, fmt, __VA_ARGS__)
-#define ali_log_info(fmt, ...) ali_log_log(LOG_INFO, fmt, __VA_ARGS__)
-#define ali_log_warn(fmt, ...) ali_log_log(LOG_WARN, fmt, __VA_ARGS__)
-#define ali_log_error(fmt, ...) ali_log_log(LOG_ERROR, fmt, __VA_ARGS__)
+#define ali_log_debug(...) ali_log_log(LOG_DEBUG, __VA_ARGS__)
+#define ali_log_info(...) ali_log_log(LOG_INFO, __VA_ARGS__)
+#define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
+#define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
+
+typedef union {
+    bool option;
+    char* string;
+    ali_u64 u64;
+    double f64;
+}AliFlagAs;
+
+typedef struct {
+    const char* name;
+    const char* description;
+    ali_isize pos;
+    AliFlagAs default_;
+    char** aliases;
+    ali_usize aliases_count;
+}AliFlagOptions;
+
+#define ali__flag_decl(func_name, Type) Type* func_name(AliFlagOptions options)
+#define ali__flag_def(func_name, Type, type_enum_value) ali__flag_decl(func_name, Type) { \
+        AliFlag flag = {0}; \
+        flag.type = type_enum_value; \
+        flag.options = options; \
+        flag.as = options.default_; \
+        AliFlag* new_flag = &flag_state.flags_array[flag_state.flags_count]; \
+        ali__flags_push(flag); \
+        return (void*)&new_flag->as; \
+    }
+
+ali__flag_decl(ali_flag_option, bool);
+ali__flag_decl(ali_flag_u64, ali_u64);
+ali__flag_decl(ali_flag_f64, double);
+ali__flag_decl(ali_flag_string, char*);
+
+void ali_flag_reset(void);
+void ali_flag_print_usage(FILE* f);
+bool ali_flag_parse(int argc, char** argv);
 
 // allocator
 typedef enum {
@@ -366,8 +402,8 @@ AliLogger ali_libc_logger = {
 };
 
 void ali_log_log(AliLogLevel level, const char* fmt, ...) {
-    if (ali_libc_logger->f == NULL) logger->f = stdout;
-    if (level < logger->level) return;
+    if (ali_libc_logger.f == NULL) ali_libc_logger.f = stdout;
+    if (level < ali_libc_logger.level) return;
 
     ali_static_assert(LOG_COUNT_ == 4);
     static const char* level_to_str[LOG_COUNT_] = {
@@ -383,6 +419,161 @@ void ali_log_log(AliLogLevel level, const char* fmt, ...) {
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
+}
+
+typedef enum {
+    FLAG_BOOL,
+    FLAG_STRING,
+    FLAG_U64,
+    FLAG_F64,
+}AliFlagType;
+
+typedef struct {
+    AliFlagOptions options;
+    AliFlagType type;
+    AliFlagAs as;
+}AliFlag;
+
+typedef struct {
+    const char* program;
+
+    #ifndef ALI_FLAG_MAX_COUNT
+    #define ALI_FLAG_MAX_COUNT (1 << 8)
+    #endif // ALI_FLAG_MAX_COUNT
+
+    AliFlag flags_array[ALI_FLAG_MAX_COUNT];
+    ali_usize flags_count;
+}AliFlagState;
+
+AliFlagState flag_state = {0};
+
+void ali__flags_push(AliFlag flag) {
+    ali_assert(flag_state.flags_count < ALI_FLAG_MAX_COUNT);
+    flag_state.flags_array[flag_state.flags_count++] = flag;
+}
+
+ali__flag_def(ali_flag_option, bool, FLAG_BOOL);
+ali__flag_def(ali_flag_u64, ali_u64, FLAG_U64);
+ali__flag_def(ali_flag_f64, double, FLAG_F64);
+ali__flag_def(ali_flag_string, char*, FLAG_STRING);
+
+void ali_flag_reset(void) {
+    flag_state.flags_count = 0;
+}
+
+void ali_flag_print_usage(FILE* f) {
+    fprintf(f, "Usage: %s ", flag_state.program);
+    {
+        ali_isize pos = 0;
+        for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
+            AliFlag* flag = &flag_state.flags_array[i];
+
+            if (flag->options.pos >= 0 && flag->options.pos == pos) {
+                fprintf(f, "<%s> ", flag->options.name);
+                pos++;
+            }
+        }
+    }
+    fprintf(f, "[OPTIONS]\n");
+    fprintf(f, "Options:\n");
+    for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
+        AliFlag* flag = &flag_state.flags_array[i];
+        char* prefix = strlen(flag->options.name) > 1 ? "--" : "-";
+        fprintf(f, "    %s%s", prefix, flag->options.name);
+        if (flag->options.aliases_count) {
+            fprintf(f, ", also: ");
+            for (ali_usize i = 0; i < flag->options.aliases_count; ++i) {
+                if (i != 0) fprintf(f, ", ");
+                char* prefix = strlen(flag->options.aliases[i]) > 1 ? "--" : "-";
+                fprintf(f, "`%s%s`", prefix, flag->options.aliases[i]);
+            }
+        }
+        if (flag->options.description != NULL) {
+            fprintf(f, " (%s)", flag->options.description);
+        }
+        fprintf(f, "\n");
+    }
+    fprintf(f, "\n");
+}
+
+bool ali_flag_parse(int argc, char** argv) {
+    flag_state.program = ali_shift(argv, argc);
+
+    ali_isize pos = 0;
+    while (argc > 0) {
+        char* arg = ali_shift(argv, argc);
+        
+        if (*arg == '-' && *(arg + 1) == 0) goto pos_handling;
+        bool is_short = *arg == '-' && *(arg + 2) == 0;
+        bool is_long = *arg == '-' && *(arg + 1) == '-';
+        if (is_short || is_long) {
+            if (is_short) arg++;
+            else if (is_long) arg += 2;
+
+            bool found = false;
+            for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
+                AliFlag* current_flag = &flag_state.flags_array[i];
+
+                bool match = false;
+                match |= strcmp(arg, current_flag->options.name) == 0;
+                for (ali_usize i = 0; !match && i < current_flag->options.aliases_count; ++i) {
+                    match |= strcmp(arg, current_flag->options.aliases[i]) == 0;
+                }
+
+                if (!match) continue;
+                found = true;
+
+                switch (current_flag->type) {
+                    case FLAG_BOOL: {
+                                        current_flag->as.option = true;
+                                    } break;
+                    case FLAG_STRING: {
+                                          char* arg_value = ali_shift(argv, argc);
+                                          current_flag->as.string = arg_value;
+                                      } break;
+                    case FLAG_U64: {
+                                       char* arg_value = ali_shift(argv, argc);
+                                       current_flag->as.u64 = atoll(arg_value);
+                                   } break;
+                    case FLAG_F64: {
+                                       char* arg_value = ali_shift(argv, argc);
+                                       current_flag->as.f64 = atof(arg_value);
+                                   } break;
+                }
+
+                break;
+            }
+
+            if (!found) {
+                ali_log_error("Couldn't parse args\n");
+                ali_flag_print_usage(stderr);
+                return false;
+            }
+        }
+
+pos_handling:
+        for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
+            AliFlag* current_flag = &flag_state.flags_array[i];
+
+            if (current_flag->options.pos >= 0 && current_flag->options.pos == pos) {
+                switch (current_flag->type) {
+                    case FLAG_STRING: {
+                        current_flag->as.string = arg;
+                    } break;
+                    case FLAG_U64: {
+                        current_flag->as.u64 = atoll(arg);
+                    } break;
+                    case FLAG_F64: {
+                        current_flag->as.f64 = atof(arg);
+                    } break;
+                }
+
+                pos++;
+            }
+        }
+    }
+
+    return true;
 }
 
 AliSv ali_sb_to_sv(AliSb* sb) {
@@ -697,6 +888,13 @@ typedef ali_usize usize;
 #define log_info ali_log_info
 #define log_warn ali_log_warn
 #define log_error ali_log_error
+
+#define flag_option ali_flag_option
+#define flag_string ali_flag_string
+#define flag_u64 ali_flag_u64
+#define flag_f64 ali_flag_f64
+#define flag_parse ali_flag_parse
+#define flag_print_usage ali_flag_print_usage
 
 #define da_resize_for ali_da_resize_for
 #define da_append ali_da_append
