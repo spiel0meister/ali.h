@@ -25,6 +25,7 @@ void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
 #define ali_unused(thing) (void)(thing)
 
 #define ali_array_len(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define ali_shift(arr, count) (ali_assert(count > 0), (count)--, *(arr)++)
 
 #ifndef ALI_TYPE_ALIASES
 #define ALI_TYPE_ALIASES
