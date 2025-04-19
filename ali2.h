@@ -200,6 +200,21 @@ AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix);
 bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix);
 AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix);
 
+// slices
+typedef struct {
+    ali_usize data_size;
+    ali_usize count;
+    void* data;
+}AliSlice;
+
+#define ali_slice_is_of_type(slice, Type) ((slice).data_size == sizeof(Type))
+
+#define ali_da_slice(da) ((AliSlice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
+#define ali_sv_slice(da) ((AliSlice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
+AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end);
+void* ali_slice_get(AliSlice slice, ali_usize index);
+#define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = (slice).data; ptr < (slice).data + (slice).count * (slice).data_size; ptr++)
+
 // string builder (sb)
 typedef struct {
     DA(char);
@@ -576,6 +591,23 @@ pos_handling:
     return true;
 }
 
+AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end) {
+    ali_assert(start < slice.count);
+    ali_assert(end <= slice.count);
+    ali_assert(start < end);
+
+    return (AliSlice) {
+        .data_size = slice.data_size,
+        .count = end - start,
+        .data = slice.data + (slice.data_size * start),
+    };
+}
+
+void* ali_slice_get(AliSlice slice, ali_usize index) {
+    ali_assert(index < slice.count);
+    return slice.data + slice.data_size * index;
+}
+
 AliSv ali_sb_to_sv(AliSb* sb) {
     return ali_sv_from_parts(sb->items, sb->count);
 }
@@ -864,7 +896,7 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd) {
 
 #endif // ALI_IMPLEMENTATION
 
-#ifdef ALI2_REMOVE_PREFIX
+#ifndef ALI2_KEEP_PREFIX
 #ifndef ALI2_REMOVE_PREFIX_GUARD
 #define ALI2_REMOVE_PREFIX_GUARD
 
@@ -921,6 +953,12 @@ typedef ali_usize usize;
 #define sv_starts_with_prefix ali_sv_starts_with_prefix
 #define sv_ends_with_suffix ali_sv_ends_with_suffix
 
+#define da_slice ali_da_slice
+#define sv_slice ali_sv_slice
+#define slice_slice ali_slice_slice
+#define slice_get ali_slice_get
+#define slice_foreach ali_slice_foreach
+
 #define job_start ali_job_start
 #define job_wait ali_job_wait
 #define job_run ali_job_run
@@ -938,4 +976,4 @@ typedef ali_usize usize;
 #define cmd_run_sync_and_reset ali_cmd_run_sync_and_reset
 
 #endif // ALI2_REMOVE_PREFIX_GUARD
-#endif // ALI2_REMOVE_PREFIX
+#endif // ALI2_KEEP_PREFIX
