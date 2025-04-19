@@ -16,8 +16,12 @@ typedef struct {
 #define ali_trap() __builtin_trap()
 #define ali_here() ((AliLocation) { .file = __FILE__, .line = __LINE__ })
 
+#ifndef ALI_REMOVE_ASSERT
 #define ali_assert(expr) ali_assert_with_loc(#expr, expr, ali_here())
 void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
+#else // ALI_REMOVE_ASSERT
+#define ali_assert(...)
+#endif // ALI_REMOVE_ASSERT
 
 #define ali_static_assert(expr) _Static_assert(expr, #expr)
 
@@ -404,12 +408,14 @@ AliAllocator ali_arena_allocator(AliArena* arena) {
     };
 }
 
+#ifndef ALI_REMOVE_ASSERT
 void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
     if (!ok) {
         ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, expr);
         ali_trap();
     }
 }
+#endif // ALI_REMOVE_ASSERT
 
 AliLogger ali_libc_logger = {
     .level = LOG_INFO,
