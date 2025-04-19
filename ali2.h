@@ -23,7 +23,7 @@ void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
 #define ali_assert(...)
 #endif // ALI_REMOVE_ASSERT
 
-#define ali_static_assert(expr) _Static_assert(expr, #expr)
+#define ali_static_assert(expr) _Static_assert(expr, "Static assertion failed: " #expr)
 
 #define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unused(thing) (void)(thing)
