@@ -169,6 +169,30 @@ AliArena ali_arena_create(ali_usize capacity);
 AliAllocator ali_arena_allocator(AliArena* arena);
 #define ali_arena_reset(arena) (arena)->size = 0
 
+// dynamic arena
+#ifndef ALI_ARENA_CHUNK_INIT_CAPACITY
+#define ALI_ARENA_CHUNK_INIT_CAPACITY (4 << 10)
+#endif // ALI_ARENA_CHUNK_INIT_CAPACITY
+
+typedef struct AliArenaChunk {
+    ali_usize size, capacity;
+    struct AliArenaChunk* next;
+    ali_u8 data[];
+}AliArenaChunk;
+
+typedef struct {
+    AliArenaChunk* start, *end;
+}AliDynamicArena;
+
+typedef struct {
+    AliArenaChunk* target;
+    ali_usize size;
+}AliArenaMark;
+
+AliArenaMark ali_dynamic_arena_mark(AliDynamicArena* arena);
+void ali_dynamic_arena_rollback(AliDynamicArena* arena, AliArenaMark mark);
+AliAllocator ali_dynamic_arena_allocator(AliDynamicArena* arena);
+
 // dynamic arrays (da)
 #define DA(Type) Type* items; ali_usize count, capacity
 #define ali_da_resize_for(da, item_count) do {\
@@ -320,6 +344,28 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 #include <windows.h>
 #endif // _WIN32
 
+#ifndef ALI_REMOVE_ASSERT
+void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
+    if (!ok) {
+        ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, expr);
+        ali_trap();
+    }
+}
+
+void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    if (!ok) {
+        const char* msg = ali_static_vsprintf(fmt, args);
+        ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, msg);
+        ali_trap();
+    }
+
+    va_end(args);
+}
+#endif // ALI_REMOVE_ASSERT
+
 char* ali_libc_get_error(void) {
     return strerror(errno);
 }
@@ -440,27 +486,115 @@ AliAllocator ali_arena_allocator(AliArena* arena) {
     };
 }
 
-#ifndef ALI_REMOVE_ASSERT
-void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
-    if (!ok) {
-        ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, expr);
-        ali_trap();
+AliArenaMark ali_dynamic_arena_mark(AliDynamicArena* arena) {
+    return (AliArenaMark) {
+        .target = arena->end,
+        .size = arena->end->size,
+    };
+}
+
+void ali_dynamic_arena_rollback(AliDynamicArena* arena, AliArenaMark mark) {
+    arena->end = mark.target;
+    mark.target->size = mark.size;
+    AliArenaChunk* current = mark.target->next;
+    for (; current != NULL; current = current->next) {
+        current->size = 0;
     }
 }
 
-void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
+void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+    AliDynamicArena* arena = user;
+    switch (action) {
+            case ALI_ALLOC: {
+                if (arena->end == NULL) {
+                    ali_assert(arena->start == NULL);
 
-    if (!ok) {
-        const char* msg = ali_static_vsprintf(fmt, args);
-        ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, msg);
-        ali_trap();
+                    ali_usize capacity = ALI_ARENA_CHUNK_INIT_CAPACITY;
+                    while (capacity < size) { capacity *= 2; }
+
+                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
+                    ali_assert(new_chunk != NULL);
+                    new_chunk->size = 0;
+                    new_chunk->next = NULL;
+                    new_chunk->capacity = capacity;
+                    arena->start = new_chunk;
+                    arena->end = new_chunk;
+                }
+
+                arena->end->size += (arena->end->size % alignment);
+                if (arena->end->size + size > arena->end->capacity) {
+                    ali_usize capacity = ALI_ARENA_CHUNK_INIT_CAPACITY;
+                    while (capacity < size) { capacity *= 2; }
+
+                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
+                    ali_assert(new_chunk != NULL);
+                    new_chunk->size = 0;
+                    new_chunk->next = NULL;
+                    new_chunk->capacity = capacity;
+                    arena->end->next = new_chunk;
+                    arena->end = new_chunk;
+                }
+
+                void* ptr = arena->end->data + arena->end->size;
+                arena->end->size += size;
+
+                return ptr;
+            } break;
+            case ALI_REALLOC: {
+                if (arena->end == NULL) {
+                    ali_assert(arena->start == NULL);
+                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk));
+                    ali_assert(new_chunk != NULL);
+                    new_chunk->size = 0;
+                    new_chunk->next = NULL;
+                    new_chunk->capacity = arena->end->capacity;
+                    while (new_chunk->capacity < size) { new_chunk->capacity *= 2; }
+                    arena->end->next = new_chunk;
+                    arena->start = new_chunk;
+                    arena->end = new_chunk;
+                }
+
+                arena->end->size += (arena->end->size % alignment);
+                if (arena->end->size + size > arena->end->capacity) {
+                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk));
+                    new_chunk->size = 0;
+                    new_chunk->next = NULL;
+                    new_chunk->capacity = arena->end->capacity;
+                    while (new_chunk->capacity < size) { new_chunk->capacity *= 2; }
+                    arena->end->next = new_chunk;
+                    arena->end = new_chunk;
+                }
+
+                void* ptr = arena->end->data + size;
+                arena->end->size += size;
+                memcpy(ptr, old_pointer, old_size);
+
+                return ptr;
+            } break;
+            case ALI_FREE: {
+                return NULL;
+            } break;
+            case ALI_FREEALL: {
+                AliArenaChunk* current_chunk = arena->start;
+                while (current_chunk != NULL) {
+                    AliArenaChunk* next_chunk = current_chunk->next;
+                    free(current_chunk);
+                    current_chunk = next_chunk;
+                }
+                arena->start = NULL;
+                arena->end = NULL;
+                return NULL;
+            } break;
     }
-
-    va_end(args);
+    ali_unreachable();
 }
-#endif // ALI_REMOVE_ASSERT
+
+AliAllocator ali_dynamic_arena_allocator(AliDynamicArena* arena) {
+    return (AliAllocator) {
+        .allocator_function = ali__dynamic_arena_function,
+        .user = arena,
+    };
+}
 
 ali_static_assert(LOG_COUNT_ == 4);
 const char* ali_loglevel_to_str[LOG_COUNT_] = {
