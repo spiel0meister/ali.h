@@ -51,6 +51,9 @@ typedef ali_u64 ali_usize;
 
 // general
 char* ali_libc_get_error(void);
+char* ali_static_vsprintf(const char* fmt, va_list args);
+__attribute__((__format__(printf, 1, 2)))
+char* ali_static_sprintf(const char* fmt, ...);
 
 // logging
 typedef enum {
@@ -61,19 +64,28 @@ typedef enum {
     LOG_COUNT_,
 }AliLogLevel;
 
+extern const char* ali_loglevel_to_str[LOG_COUNT_];
+
+typedef void (*AliLoggerFunction)(AliLogLevel level, const char* msg, void* user, AliLocation loc);
+
 typedef struct {
+    AliLoggerFunction function;
     AliLogLevel level;
-    FILE* f;
+    void* user;
 }AliLogger;
 
-extern AliLogger ali_libc_logger;
+extern AliLogger ali_global_logger;
 
-__attribute__((__format__(printf, 2, 3)))
-void ali_log_log(AliLogLevel level, const char* fmt, ...);
-#define ali_log_debug(...) ali_log_log(LOG_DEBUG, __VA_ARGS__)
-#define ali_log_info(...) ali_log_log(LOG_INFO, __VA_ARGS__)
-#define ali_log_warn(...) ali_log_log(LOG_WARN, __VA_ARGS__)
-#define ali_log_error(...) ali_log_log(LOG_ERROR, __VA_ARGS__)
+__attribute__((__format__(printf, 4, 5)))
+void ali_log_log_ex(AliLogger logger, AliLogLevel level, AliLocation loc, const char* fmt, ...);
+#define ali_log_debug_ex(logger, ...) ali_log_log_ex(logger, LOG_DEBUG, ali_here(), __VA_ARGS__)
+#define ali_log_info_ex(logger, ...) ali_log_log_ex(logger, LOG_INFO, ali_here(), __VA_ARGS__)
+#define ali_log_warn_ex(logger, ...) ali_log_log_ex(logger, LOG_WARN, ali_here(), __VA_ARGS__)
+#define ali_log_error_ex(logger, ...) ali_log_log_ex(logger, LOG_ERROR, ali_here(), __VA_ARGS__)
+#define ali_log_debug(...) ali_log_log_ex(ali_global_logger, LOG_DEBUG, ali_here(), __VA_ARGS__)
+#define ali_log_info(...) ali_log_log_ex(ali_global_logger, LOG_INFO, ali_here(), __VA_ARGS__)
+#define ali_log_warn(...) ali_log_log_ex(ali_global_logger, LOG_WARN, ali_here(), __VA_ARGS__)
+#define ali_log_error(...) ali_log_log_ex(ali_global_logger, LOG_ERROR, ali_here(), __VA_ARGS__)
 
 typedef union {
     bool option;
@@ -307,6 +319,23 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 
 char* ali_libc_get_error(void) {
     return strerror(errno);
+}
+
+char* ali_static_vsprintf(const char* fmt, va_list args) {
+#ifndef ALI_STATIC_SPRINTF_BUFFER_SIZE
+#define ALI_STATIC_SPRINTF_BUFFER_SIZE (4 << 10)
+#endif // ALI_STATIC_SPRINTF_BUFFER_SIZE
+    static char buffer[ALI_STATIC_SPRINTF_BUFFER_SIZE] = {0};
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    return buffer;
+}
+
+char* ali_static_sprintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    char* str = ali_static_vsprintf(fmt, args);
+    va_end(args);
+    return str;
 }
 
 void* ali__libc_allocator_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
@@ -566,7 +595,7 @@ bool ali_flag_parse(int argc, char** argv) {
             }
 
             if (!found) {
-                ali_log_error("Couldn't parse args\n");
+                ali_log_error("Couldn't parse args");
                 ali_flag_print_usage(stderr);
                 return false;
             }
@@ -700,7 +729,7 @@ void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count) {
 #ifndef _WIN32
 bool ali_pipe2(int p[2]) {
     if (pipe(p) < 0) {
-        ali_log_error("Couldn't create pipe: %s\n", ali_libc_get_error());
+        ali_log_error("Couldn't create pipe: %s", ali_libc_get_error());
         return false;
     }
     return true;
@@ -711,7 +740,7 @@ bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepa
     struct stat st;
 
     if (stat(filepath1, &st) < 0) {
-        ali_log_error("Couldn't stat %s: %s\n", filepath1, ali_libc_get_error());
+        ali_log_error("Couldn't stat %s: %s", filepath1, ali_libc_get_error());
         return false;
     }
 
@@ -725,7 +754,7 @@ bool ali_is_file1_modified_after_file2(const char* filepath1, const char* filepa
 
 bool ali_rename(const char* from, const char* to) {
     if (rename(from, to) < 0) {
-        ali_log_error("Couldn't rename %s to %s: %s\n", from, to, ali_libc_get_error());
+        ali_log_error("Couldn't rename %s to %s: %s", from, to, ali_libc_get_error());
         return false;
     }
     return true;
@@ -733,7 +762,7 @@ bool ali_rename(const char* from, const char* to) {
 
 bool ali_remove(const char* filepath) {
     if (remove(filepath) < 0) {
-        ali_log_error("Couldn't remove %s: %s\n", filepath, ali_libc_get_error());
+        ali_log_error("Couldn't remove %s: %s", filepath, ali_libc_get_error());
         return false;
     }
     return true;
@@ -743,10 +772,10 @@ bool ali_mkdir_if_not_exists(const char* path) {
     if (mkdir(path, 0775) < 0) {
         switch (errno) {
             case EEXIST:
-                ali_log_info("Directory %s already exists\n", path);
+                ali_log_info("Directory %s already exists", path);
                 break; // ignore
             default:
-                ali_log_error("Couldn't create directory: %s\n", ali_libc_get_error());
+                ali_log_error("Couldn't create directory: %s", ali_libc_get_error());
                 return false;
         }
     }
@@ -792,7 +821,7 @@ AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redir
 
     job.handle = fork();
     if (job.handle < 0) {
-        ali_log_error("Couldn't start process: %d\n", job.handle);
+        ali_log_error("Couldn't start process: %d", job.handle);
         return job;
     } else if (job.handle == 0) {
         if (should_redirect_stdin) {
@@ -811,7 +840,7 @@ AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redir
         }
 
         execvp(cmd_copy[0], cmd_copy);
-        ali_log_error("Couldn't start program '%s': %s\n", cmd[0], ali_libc_get_error());
+        ali_log_error("Couldn't start program '%s': %s", cmd[0], ali_libc_get_error());
         exit(1);
     }
 
@@ -823,14 +852,14 @@ bool ali_job_wait_posix(AliJob job) {
     for (;;) {
         int wstatus;
         if (waitpid(job.handle, &wstatus, 0) < 0) {
-            ali_log_error("Couldn't wait for process: %s\n", ali_libc_get_error());
+            ali_log_error("Couldn't wait for process: %s", ali_libc_get_error());
             return false;
         }
 
         if (WIFEXITED(wstatus)) {
             int estatus = WEXITSTATUS(wstatus);
             if (estatus != 0) {
-                ali_log_error("Process exited with status %d\n", estatus);
+                ali_log_error("Process exited with status %d", estatus);
                 return false;
             }
 
@@ -838,7 +867,7 @@ bool ali_job_wait_posix(AliJob job) {
         }
 
         if (WIFSIGNALED(wstatus)) {
-            ali_log_error("Process exited with signal %d\n", WTERMSIG(wstatus));
+            ali_log_error("Process exited with signal %d", WTERMSIG(wstatus));
             return false;
         }
     }
@@ -931,11 +960,15 @@ typedef AliLogger Logger;
 
 #define libc_get_error ali_libc_get_error
 
-#define log_log ali_log_log
+#define log_log_ex ali_log_log_ex
 #define log_debug ali_log_debug
 #define log_info ali_log_info
 #define log_warn ali_log_warn
 #define log_error ali_log_error
+#define log_debug_ex ali_log_debug_ex
+#define log_info_ex ali_log_info_ex
+#define log_warn_ex ali_log_warn_ex
+#define log_error_ex ali_log_error_ex
 
 #define flag_option ali_flag_option
 #define flag_string ali_flag_string
