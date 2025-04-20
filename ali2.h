@@ -523,7 +523,7 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
 
                 arena->end->size += (arena->end->size % alignment);
                 if (arena->end->size + size > arena->end->capacity) {
-                    ali_usize capacity = ALI_ARENA_CHUNK_INIT_CAPACITY;
+                    ali_usize capacity = arena->end->capacity;
                     while (capacity < size) { capacity *= 2; }
 
                     AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
