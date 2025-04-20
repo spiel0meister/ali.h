@@ -18,9 +18,12 @@ typedef struct {
 
 #ifndef ALI_REMOVE_ASSERT
 #define ali_assert(expr) ali_assert_with_loc(#expr, expr, ali_here())
+#define ali_assertf(expr, ...) ali_assertf_with_loc(expr, ali_here(), __VA_ARGS__)
 void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
+void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...);
 #else // ALI_REMOVE_ASSERT
 #define ali_assert(...)
+#define ali_assertf(...)
 #endif // ALI_REMOVE_ASSERT
 
 #define ali_static_assert(expr) _Static_assert(expr, "Static assertion failed: " #expr)
