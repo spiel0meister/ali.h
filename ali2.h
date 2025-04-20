@@ -447,30 +447,51 @@ void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
         ali_trap();
     }
 }
+
+void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    if (!ok) {
+        const char* msg = ali_static_vsprintf(fmt, args);
+        ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, msg);
+        ali_trap();
+    }
+
+    va_end(args);
+}
 #endif // ALI_REMOVE_ASSERT
 
-AliLogger ali_libc_logger = {
-    .level = LOG_INFO,
-    .f = NULL,
+ali_static_assert(LOG_COUNT_ == 4);
+const char* ali_loglevel_to_str[LOG_COUNT_] = {
+    [LOG_DEBUG] = "DEBUG",
+    [LOG_INFO]= "INFO",
+    [LOG_WARN]= "WARN",
+    [LOG_ERROR] = "ERROR",
 };
 
-void ali_log_log(AliLogLevel level, const char* fmt, ...) {
-    if (ali_libc_logger.f == NULL) ali_libc_logger.f = stdout;
-    if (level < ali_libc_logger.level) return;
+void ali__console_function(AliLogLevel level, const char* msg, void* user, AliLocation loc) {
+    ali_unused(user);
+    ali_unused(loc);
+    printf("[%s] %s\n", ali_loglevel_to_str[level], msg);
+}
 
-    ali_static_assert(LOG_COUNT_ == 4);
-    static const char* level_to_str[LOG_COUNT_] = {
-        [LOG_INFO] = "[INFO]",
-        [LOG_WARN] = "[WARN]",
-        [LOG_ERROR] = "[ERROR]",
-        [LOG_DEBUG] = "[DEBUG]",
-    };
+AliLogger ali_global_logger = {
+    .level = LOG_INFO,
+    .function = ali__console_function,
+    .user = NULL,
+};
 
-    printf("%s ", level_to_str[level]);
+void ali_log_log_ex(AliLogger logger, AliLogLevel level, AliLocation loc, const char* fmt, ...) {
+    if (level < logger.level) return;
+    ali_assert(logger.function != NULL);
 
     va_list args;
     va_start(args, fmt);
-    vprintf(fmt, args);
+
+    const char* msg = ali_static_vsprintf(fmt, args);
+    logger.function(level, msg, logger.user, loc);
+
     va_end(args);
 }
 
