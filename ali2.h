@@ -919,6 +919,16 @@ typedef ali_u64 u64;
 typedef ali_isize isize;
 typedef ali_usize usize;
 
+typedef AliSb Sb;
+typedef AliSv Sv;
+typedef AliAllocator Allocator;
+typedef AliAllocatorAction AllocatorAction;
+typedef AliLocation Location;
+typedef AliArena Arena;
+typedef AliSlice Slice;
+typedef AliJob Job;
+typedef AliLogger Logger;
+
 #define libc_get_error ali_libc_get_error
 
 #define log_log ali_log_log
