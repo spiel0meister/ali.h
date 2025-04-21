@@ -77,6 +77,10 @@ typedef struct {
     void* user;
 }AliLogger;
 
+AliLogger ali_console_logger(void);
+AliLogger ali_file_logger(FILE*);
+
+// defaults to a console logger
 extern AliLogger ali_global_logger;
 
 __attribute__((__format__(printf, 4, 5)))
@@ -335,6 +339,7 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 #ifdef ALI2_IMPLEMENTATION
 #include <stdarg.h>
 #include <string.h>
+#include <time.h>
 #include <errno.h>
 
 #ifndef _WIN32
@@ -608,7 +613,34 @@ const char* ali_loglevel_to_str[LOG_COUNT_] = {
 void ali__console_function(AliLogLevel level, const char* msg, void* user, AliLocation loc) {
     ali_unused(user);
     ali_unused(loc);
-    printf("[%s] %s\n", ali_loglevel_to_str[level], msg);
+
+    fprintf(stderr, "[%s] %s\n", ali_loglevel_to_str[level], msg);
+}
+
+void ali__file_function(AliLogLevel level, const char* msg, void* user, AliLocation loc) {
+    static char buffer[4069] = {0};
+    FILE* f = user;
+
+    time_t now = time(NULL);
+    strftime(buffer, sizeof(buffer), "%F %R", localtime(&now));
+
+    fprintf(f, "[%s] [%s] %s\n", ali_loglevel_to_str[level], buffer, msg);
+}
+
+AliLogger ali_console_logger(void) {
+    return (AliLogger) {
+        .level = LOG_INFO,
+        .function = ali__console_function,
+        .user = NULL,
+    };
+}
+
+AliLogger ali_file_logger(FILE* f) {
+    return (AliLogger) {
+        .level = LOG_INFO,
+        .function = ali__file_function,
+        .user = f,
+    };
 }
 
 AliLogger ali_global_logger = {
