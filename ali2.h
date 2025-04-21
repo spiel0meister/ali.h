@@ -11,16 +11,16 @@
 typedef struct {
     const char* file;
     int line;
-}AliLocation;
+}Ali_Location;
 
 #define ali_trap() __builtin_trap()
-#define ali_here() ((AliLocation) { .file = __FILE__, .line = __LINE__ })
+#define ali_here() ((Ali_Location) { .file = __FILE__, .line = __LINE__ })
 
 #ifndef ALI_REMOVE_ASSERT
 #define ali_assert(expr) ali_assert_with_loc(#expr, expr, ali_here())
 #define ali_assertf(expr, ...) ali_assertf_with_loc(expr, ali_here(), __VA_ARGS__)
-void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc);
-void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...);
+void ali_assert_with_loc(const char* expr, bool ok, Ali_Location loc);
+void ali_assertf_with_loc(bool ok, Ali_Location loc, const char* fmt, ...);
 #else // ALI_REMOVE_ASSERT
 #define ali_assert(...)
 #define ali_assertf(...)
@@ -65,26 +65,26 @@ typedef enum {
     LOG_WARN,
     LOG_ERROR,
     LOG_COUNT_,
-}AliLogLevel;
+}Ali_Log_Level;
 
 extern const char* ali_loglevel_to_str[LOG_COUNT_];
 
-typedef void (*AliLoggerFunction)(AliLogLevel level, const char* msg, void* user, AliLocation loc);
+typedef void (*Ali_Logger_Function)(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc);
 
 typedef struct {
-    AliLoggerFunction function;
-    AliLogLevel level;
+    Ali_Logger_Function function;
+    Ali_Log_Level level;
     void* user;
-}AliLogger;
+}Ali_Logger;
 
-AliLogger ali_console_logger(void);
-AliLogger ali_file_logger(FILE* f);
+Ali_Logger ali_console_logger(void);
+Ali_Logger ali_file_logger(FILE* f);
 
 // defaults to a console logger
-extern AliLogger ali_global_logger;
+extern Ali_Logger ali_global_logger;
 
 __attribute__((__format__(printf, 4, 5)))
-void ali_log_log_ex(AliLogger logger, AliLogLevel level, AliLocation loc, const char* fmt, ...);
+void ali_log_log_ex(Ali_Logger logger, Ali_Log_Level level, Ali_Location loc, const char* fmt, ...);
 #define ali_log_debug_ex(logger, ...) ali_log_log_ex(logger, LOG_DEBUG, ali_here(), __VA_ARGS__)
 #define ali_log_info_ex(logger, ...) ali_log_log_ex(logger, LOG_INFO, ali_here(), __VA_ARGS__)
 #define ali_log_warn_ex(logger, ...) ali_log_log_ex(logger, LOG_WARN, ali_here(), __VA_ARGS__)
@@ -99,24 +99,24 @@ typedef union {
     char* string;
     ali_u64 u64;
     double f64;
-}AliFlagAs;
+}Ali_Flag_As;
 
 typedef struct {
     const char* name;
     const char* description;
     ali_isize pos;
-    AliFlagAs default_;
+    Ali_Flag_As default_;
     char** aliases;
     ali_usize aliases_count;
-}AliFlagOptions;
+}Ali_Flag_Options;
 
-#define ali__flag_decl(func_name, Type) Type* func_name(AliFlagOptions options)
+#define ali__flag_decl(func_name, Type) Type* func_name(Ali_Flag_Options options)
 #define ali__flag_def(func_name, Type, type_enum_value) ali__flag_decl(func_name, Type) { \
-        AliFlag flag = {0}; \
+        Ali_Flag flag = {0}; \
         flag.type = type_enum_value; \
         flag.options = options; \
         flag.as = options.default_; \
-        AliFlag* new_flag = &flag_state.flags_array[flag_state.flags_count]; \
+        Ali_Flag* new_flag = &flag_state.flags_array[flag_state.flags_count]; \
         ali__flags_push(flag); \
         return (void*)&new_flag->as; \
     }
@@ -136,14 +136,14 @@ typedef enum {
     ALI_REALLOC,
     ALI_FREE,
     ALI_FREEALL,
-}AliAllocatorAction;
+}Ali_Allocator_Action;
 
 typedef struct {
-    void* (*allocator_function)(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user);
+    void* (*allocator_function)(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user);
     void* user;
-}AliAllocator;
+}Ali_Allocator;
 
-extern AliAllocator ali_libc_allocator;
+extern Ali_Allocator ali_libc_allocator;
 
 #define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, (allocator).user)
 #define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, (allocator).user)
@@ -167,10 +167,10 @@ char* ali_tsprintf(const char* fmt, ...);
 typedef struct {
     ali_usize size, capacity;
     ali_u8* data;
-}AliArena;
+}Ali_Arena;
 
-AliArena ali_arena_create(ali_usize capacity);
-AliAllocator ali_arena_allocator(AliArena* arena);
+Ali_Arena ali_arena_create(ali_usize capacity);
+Ali_Allocator ali_arena_allocator(Ali_Arena* arena);
 #define ali_arena_reset(arena) (arena)->size = 0
 
 // dynamic arena
@@ -178,24 +178,24 @@ AliAllocator ali_arena_allocator(AliArena* arena);
 #define ALI_ARENA_CHUNK_INIT_CAPACITY (4 << 10)
 #endif // ALI_ARENA_CHUNK_INIT_CAPACITY
 
-typedef struct AliArenaChunk {
+typedef struct Ali_Arena_Chunk {
     ali_usize size, capacity;
-    struct AliArenaChunk* next;
+    struct Ali_Arena_Chunk* next;
     ali_u8 data[];
-}AliArenaChunk;
+}Ali_Arena_Chunk;
 
 typedef struct {
-    AliArenaChunk* start, *end;
-}AliDynamicArena;
+    Ali_Arena_Chunk* start, *end;
+}Ali_Dynamic_Arena;
 
 typedef struct {
-    AliArenaChunk* target;
+    Ali_Arena_Chunk* target;
     ali_usize size;
 }AliArenaMark;
 
-AliArenaMark ali_dynamic_arena_mark(AliDynamicArena* arena);
-void ali_dynamic_arena_rollback(AliDynamicArena* arena, AliArenaMark mark);
-AliAllocator ali_dynamic_arena_allocator(AliDynamicArena* arena);
+AliArenaMark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena);
+void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, AliArenaMark mark);
+Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
 
 // dynamic arrays (da)
 #define DA(Type) Type* items; ali_usize count, capacity
@@ -234,46 +234,46 @@ AliAllocator ali_dynamic_arena_allocator(AliDynamicArena* arena);
 typedef struct {
     const char* start;
     size_t len;
-}AliSv;
-#define SV(static_cstr) ((AliSv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
+}Ali_Sv;
+#define SV(static_cstr) ((Ali_Sv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
 #define SV_FMT "%.*s"
 #define SV_F(sv) (int)(sv).count, (sv).items
 
-AliSv ali_sv_from_cstr(const char* cstr);
-AliSv ali_sv_from_parts(const char* start, ali_usize len);
+Ali_Sv ali_sv_from_cstr(const char* cstr);
+Ali_Sv ali_sv_from_parts(const char* start, ali_usize len);
 
-bool ali_sv_starts_with_prefix(AliSv self, AliSv prefix);
-AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix);
-bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix);
-AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix);
+bool ali_sv_starts_with_prefix(Ali_Sv self, Ali_Sv prefix);
+Ali_Sv ali_sv_strip_prefix(Ali_Sv self, Ali_Sv prefix);
+bool ali_sv_ends_with_suffix(Ali_Sv self, Ali_Sv suffix);
+Ali_Sv ali_sv_strip_suffix(Ali_Sv self, Ali_Sv suffix);
 
 // slices
 typedef struct {
     ali_usize data_size;
     ali_usize count;
     void* data;
-}AliSlice;
+}Ali_Slice;
 
 #define ali_slice_is_of_type(slice, Type) ((slice).data_size == sizeof(Type))
-#define ali_slice_from_parts(ptr, count_) ((AliSlice) { .data_size = sizeof((ptr)[0]), .count = count_, .data = ptr })
+#define ali_slice_from_parts(ptr, count_) ((Ali_Slice) { .data_size = sizeof((ptr)[0]), .count = count_, .data = ptr })
 
-#define ali_da_slice(da) ((AliSlice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
-#define ali_sv_slice(da) ((AliSlice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
-AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end);
-AliSlice ali_slice_to_byte_slice(AliSlice slice);
-void* ali_slice_get(AliSlice slice, ali_usize index);
+#define ali_da_slice(da) ((Ali_Slice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
+#define ali_sv_slice(da) ((Ali_Slice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
+Ali_Slice ali_slice_slice(Ali_Slice slice, ali_usize start, ali_usize end);
+Ali_Slice ali_slice_to_byte_slice(Ali_Slice slice);
+void* ali_slice_get(Ali_Slice slice, ali_usize index);
 #define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = (slice).data; ptr < (slice).data + (slice).count * (slice).data_size; ptr++)
 
 // string builder (sb)
 typedef struct {
     DA(char);
-}AliSb;
+}Ali_Sb;
 
-AliSv ali_sb_to_sv(AliSb* sb);
+Ali_Sv ali_sb_to_sv(Ali_Sb* sb);
 __attribute__((__format__(printf, 2, 3)))
-void ali_sb_sprintf(AliSb* sb, const char* fmt, ...);
-char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator);
-void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count);
+void ali_sb_sprintf(Ali_Sb* sb, const char* fmt, ...);
+char* ali_sb_to_cstr(Ali_Sb* sb, Ali_Allocator allocator);
+void ali_sb_render_cmd(Ali_Sb* sb, char** cmd, ali_usize cmd_count);
 
 // doing stuff with filesystem
 #ifndef _WIN32
@@ -298,15 +298,15 @@ typedef struct {
     AliJobHandle handle;
     int in[2];
     int out[2];
-}AliJob;
+}Ali_Job;
 
 typedef ali_u32 AliJobRedirect;
 #define ALI_REDIRECT_STDOUT 0x1
 #define ALI_REDIRECT_STDIN 0x2
 #define ALI_REDIRECT_STDERR 0x4
 
-AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
-bool ali_job_wait(AliJob job);
+Ali_Job ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
+bool ali_job_wait(Ali_Job job);
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 
 typedef struct {
@@ -316,9 +316,9 @@ typedef struct {
 #define ali_cmd_append ali_da_append
 void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...);
 #define ali_cmd_append_many(cmd, ...) ali_cmd_append_many_null(cmd, __VA_ARGS__, NULL)
-AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect);
+Ali_Job ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync(AliCmd cmd);
-AliJob ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
+Ali_Job ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 
 #define ALI_REBUILD_YOURSELF(cmd, argc, argv) do { \
@@ -352,14 +352,14 @@ bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 #endif // _WIN32
 
 #ifndef ALI_REMOVE_ASSERT
-void ali_assert_with_loc(const char* expr, bool ok, AliLocation loc) {
+void ali_assert_with_loc(const char* expr, bool ok, Ali_Location loc) {
     if (!ok) {
         ali_log_error("%s:%d: Assertion failed: %s", loc.file, loc.line, expr);
         ali_trap();
     }
 }
 
-void ali_assertf_with_loc(bool ok, AliLocation loc, const char* fmt, ...) {
+void ali_assertf_with_loc(bool ok, Ali_Location loc, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
@@ -394,7 +394,7 @@ char* ali_static_sprintf(const char* fmt, ...) {
     return str;
 }
 
-void* ali__libc_allocator_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+void* ali__libc_allocator_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
     ali_unused(user);
     ali_unused(old_size);
     ali_unused(alignment);
@@ -413,7 +413,7 @@ void* ali__libc_allocator_function(AliAllocatorAction action, void* old_pointer,
     ali_unreachable();
 }
 
-AliAllocator ali_libc_allocator = {
+Ali_Allocator ali_libc_allocator = {
     .allocator_function = ali__libc_allocator_function,
     .user = NULL,
 };
@@ -444,8 +444,8 @@ char* ali_tsprintf(const char* fmt, ...) {
     buffer_size += n;
 }
 
-void* ali__arena_allocator(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
-    AliArena* arena = user;
+void* ali__arena_allocator(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+    Ali_Arena* arena = user;
     switch (action) {
         case ALI_ALLOC: {
             ali_assert(arena->size + size < arena->capacity);
@@ -478,39 +478,39 @@ void* ali__arena_allocator(AliAllocatorAction action, void* old_pointer, ali_usi
     ali_unreachable();
 }
 
-AliArena ali_arena_create(ali_usize capacity) {
-    return (AliArena) {
+Ali_Arena ali_arena_create(ali_usize capacity) {
+    return (Ali_Arena) {
         .data = malloc(capacity),
         .size = 0,
         .capacity = capacity,
     };
 }
 
-AliAllocator ali_arena_allocator(AliArena* arena) {
-    return (AliAllocator) {
+Ali_Allocator ali_arena_allocator(Ali_Arena* arena) {
+    return (Ali_Allocator) {
         .allocator_function = ali__arena_allocator,
         .user = arena,
     };
 }
 
-AliArenaMark ali_dynamic_arena_mark(AliDynamicArena* arena) {
+AliArenaMark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena) {
     return (AliArenaMark) {
         .target = arena->end,
         .size = arena->end->size,
     };
 }
 
-void ali_dynamic_arena_rollback(AliDynamicArena* arena, AliArenaMark mark) {
+void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, AliArenaMark mark) {
     arena->end = mark.target;
     mark.target->size = mark.size;
-    AliArenaChunk* current = mark.target->next;
+    Ali_Arena_Chunk* current = mark.target->next;
     for (; current != NULL; current = current->next) {
         current->size = 0;
     }
 }
 
-void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
-    AliDynamicArena* arena = user;
+void* ali__dynamic_arena_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+    Ali_Dynamic_Arena* arena = user;
     switch (action) {
             case ALI_ALLOC: {
                 if (arena->end == NULL) {
@@ -519,7 +519,7 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
                     ali_usize capacity = ALI_ARENA_CHUNK_INIT_CAPACITY;
                     while (capacity < size) { capacity *= 2; }
 
-                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
+                    Ali_Arena_Chunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
                     ali_assert(new_chunk != NULL);
                     new_chunk->size = 0;
                     new_chunk->next = NULL;
@@ -533,7 +533,7 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
                     ali_usize capacity = arena->end->capacity;
                     while (capacity < size) { capacity *= 2; }
 
-                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
+                    Ali_Arena_Chunk* new_chunk = malloc(sizeof(*new_chunk) + capacity);
                     ali_assert(new_chunk != NULL);
                     new_chunk->size = 0;
                     new_chunk->next = NULL;
@@ -550,7 +550,7 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
             case ALI_REALLOC: {
                 if (arena->end == NULL) {
                     ali_assert(arena->start == NULL);
-                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk));
+                    Ali_Arena_Chunk* new_chunk = malloc(sizeof(*new_chunk));
                     ali_assert(new_chunk != NULL);
                     new_chunk->size = 0;
                     new_chunk->next = NULL;
@@ -563,7 +563,7 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
 
                 arena->end->size += (arena->end->size % alignment);
                 if (arena->end->size + size > arena->end->capacity) {
-                    AliArenaChunk* new_chunk = malloc(sizeof(*new_chunk));
+                    Ali_Arena_Chunk* new_chunk = malloc(sizeof(*new_chunk));
                     new_chunk->size = 0;
                     new_chunk->next = NULL;
                     new_chunk->capacity = arena->end->capacity;
@@ -582,9 +582,9 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
                 return NULL;
             } break;
             case ALI_FREEALL: {
-                AliArenaChunk* current_chunk = arena->start;
+                Ali_Arena_Chunk* current_chunk = arena->start;
                 while (current_chunk != NULL) {
-                    AliArenaChunk* next_chunk = current_chunk->next;
+                    Ali_Arena_Chunk* next_chunk = current_chunk->next;
                     free(current_chunk);
                     current_chunk = next_chunk;
                 }
@@ -596,8 +596,8 @@ void* ali__dynamic_arena_function(AliAllocatorAction action, void* old_pointer, 
     ali_unreachable();
 }
 
-AliAllocator ali_dynamic_arena_allocator(AliDynamicArena* arena) {
-    return (AliAllocator) {
+Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena) {
+    return (Ali_Allocator) {
         .allocator_function = ali__dynamic_arena_function,
         .user = arena,
     };
@@ -611,14 +611,14 @@ const char* ali_loglevel_to_str[LOG_COUNT_] = {
     [LOG_ERROR] = "ERROR",
 };
 
-void ali__console_function(AliLogLevel level, const char* msg, void* user, AliLocation loc) {
+void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc) {
     ali_unused(user);
     ali_unused(loc);
 
     fprintf(stderr, "[%s] %s\n", ali_loglevel_to_str[level], msg);
 }
 
-void ali__file_function(AliLogLevel level, const char* msg, void* user, AliLocation loc) {
+void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc) {
     static char buffer[4069] = {0};
     FILE* f = user;
 
@@ -628,29 +628,29 @@ void ali__file_function(AliLogLevel level, const char* msg, void* user, AliLocat
     fprintf(f, "[%s] [%s] %s\n", ali_loglevel_to_str[level], buffer, msg);
 }
 
-AliLogger ali_console_logger(void) {
-    return (AliLogger) {
+Ali_Logger ali_console_logger(void) {
+    return (Ali_Logger) {
         .level = LOG_INFO,
         .function = ali__console_function,
         .user = NULL,
     };
 }
 
-AliLogger ali_file_logger(FILE* f) {
-    return (AliLogger) {
+Ali_Logger ali_file_logger(FILE* f) {
+    return (Ali_Logger) {
         .level = LOG_INFO,
         .function = ali__file_function,
         .user = f,
     };
 }
 
-AliLogger ali_global_logger = {
+Ali_Logger ali_global_logger = {
     .level = LOG_INFO,
     .function = ali__console_function,
     .user = NULL,
 };
 
-void ali_log_log_ex(AliLogger logger, AliLogLevel level, AliLocation loc, const char* fmt, ...) {
+void ali_log_log_ex(Ali_Logger logger, Ali_Log_Level level, Ali_Location loc, const char* fmt, ...) {
     if (level < logger.level) return;
     ali_assert(logger.function != NULL);
 
@@ -668,13 +668,13 @@ typedef enum {
     FLAG_STRING,
     FLAG_U64,
     FLAG_F64,
-}AliFlagType;
+}Ali_Flag_Type;
 
 typedef struct {
-    AliFlagOptions options;
-    AliFlagType type;
-    AliFlagAs as;
-}AliFlag;
+    Ali_Flag_Options options;
+    Ali_Flag_Type type;
+    Ali_Flag_As as;
+}Ali_Flag;
 
 typedef struct {
     const char* program;
@@ -683,13 +683,13 @@ typedef struct {
     #define ALI_FLAG_MAX_COUNT (1 << 8)
     #endif // ALI_FLAG_MAX_COUNT
 
-    AliFlag flags_array[ALI_FLAG_MAX_COUNT];
+    Ali_Flag flags_array[ALI_FLAG_MAX_COUNT];
     ali_usize flags_count;
-}AliFlagState;
+}Ali_Flag_State;
 
-AliFlagState flag_state = {0};
+Ali_Flag_State flag_state = {0};
 
-void ali__flags_push(AliFlag flag) {
+void ali__flags_push(Ali_Flag flag) {
     ali_assert(flag_state.flags_count < ALI_FLAG_MAX_COUNT);
     flag_state.flags_array[flag_state.flags_count++] = flag;
 }
@@ -708,7 +708,7 @@ void ali_flag_print_usage(FILE* f) {
     {
         ali_isize pos = 0;
         for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
-            AliFlag* flag = &flag_state.flags_array[i];
+            Ali_Flag* flag = &flag_state.flags_array[i];
 
             if (flag->options.pos >= 0 && flag->options.pos == pos) {
                 fprintf(f, "<%s> ", flag->options.name);
@@ -719,7 +719,7 @@ void ali_flag_print_usage(FILE* f) {
     fprintf(f, "[OPTIONS]\n");
     fprintf(f, "Options:\n");
     for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
-        AliFlag* flag = &flag_state.flags_array[i];
+        Ali_Flag* flag = &flag_state.flags_array[i];
         char* prefix = strlen(flag->options.name) > 1 ? "--" : "-";
         fprintf(f, "    %s%s", prefix, flag->options.name);
         if (flag->options.aliases_count) {
@@ -754,7 +754,7 @@ bool ali_flag_parse(int argc, char** argv) {
 
             bool found = false;
             for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
-                AliFlag* current_flag = &flag_state.flags_array[i];
+                Ali_Flag* current_flag = &flag_state.flags_array[i];
 
                 bool match = false;
                 match |= strcmp(arg, current_flag->options.name) == 0;
@@ -795,7 +795,7 @@ bool ali_flag_parse(int argc, char** argv) {
 
 pos_handling:
         for (ali_usize i = 0; i < flag_state.flags_count; ++i) {
-            AliFlag* current_flag = &flag_state.flags_array[i];
+            Ali_Flag* current_flag = &flag_state.flags_array[i];
 
             if (current_flag->options.pos >= 0 && current_flag->options.pos == pos) {
                 switch (current_flag->type) {
@@ -818,36 +818,36 @@ pos_handling:
     return true;
 }
 
-AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end) {
+Ali_Slice ali_slice_slice(Ali_Slice slice, ali_usize start, ali_usize end) {
     ali_assert(start < slice.count);
     ali_assert(end <= slice.count);
     ali_assert(start < end);
 
-    return (AliSlice) {
+    return (Ali_Slice) {
         .data_size = slice.data_size,
         .count = end - start,
         .data = slice.data + (slice.data_size * start),
     };
 }
 
-AliSlice ali_slice_to_byte_slice(AliSlice slice) {
-    return (AliSlice) {
+Ali_Slice ali_slice_to_byte_slice(Ali_Slice slice) {
+    return (Ali_Slice) {
         .count = slice.count * slice.data_size,
         .data = slice.data,
         .data_size = 1,
     };
 }
 
-void* ali_slice_get(AliSlice slice, ali_usize index) {
+void* ali_slice_get(Ali_Slice slice, ali_usize index) {
     ali_assert(index < slice.count);
     return slice.data + slice.data_size * index;
 }
 
-AliSv ali_sb_to_sv(AliSb* sb) {
+Ali_Sv ali_sb_to_sv(Ali_Sb* sb) {
     return ali_sv_from_parts(sb->items, sb->count);
 }
 
-void ali_sb_sprintf(AliSb* sb, const char* fmt, ...) {
+void ali_sb_sprintf(Ali_Sb* sb, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     int n = vsnprintf(NULL, 0, fmt, args);
@@ -863,28 +863,28 @@ void ali_sb_sprintf(AliSb* sb, const char* fmt, ...) {
     sb->count += n;
 }
 
-char* ali_sb_to_cstr(AliSb* sb, AliAllocator allocator) {
+char* ali_sb_to_cstr(Ali_Sb* sb, Ali_Allocator allocator) {
     char* copy = ali_alloc(allocator, sb->count + 1);
     memcpy(copy, sb->items, sb->count);
     copy[sb->count] = 0;
     return copy;
 }
 
-AliSv ali_sv_from_cstr(const char* cstr) {
-    AliSv sv = {0};
+Ali_Sv ali_sv_from_cstr(const char* cstr) {
+    Ali_Sv sv = {0};
     sv.start = cstr;
     sv.len = strlen(cstr);
     return sv;
 }
 
-AliSv ali_sv_from_parts(const char* start, ali_usize len) {
-    return (AliSv) {
+Ali_Sv ali_sv_from_parts(const char* start, ali_usize len) {
+    return (Ali_Sv) {
         .start = start,
         .len = len,
     };
 }
 
-bool ali_sv_starts_with_prefix(AliSv self, AliSv prefix) {
+bool ali_sv_starts_with_prefix(Ali_Sv self, Ali_Sv prefix) {
     if (self.len < prefix.len) return false;
     for (ali_usize i = 0; i < prefix.len; ++i) {
         if (self.start[i] != prefix.start[i]) return false;
@@ -892,14 +892,14 @@ bool ali_sv_starts_with_prefix(AliSv self, AliSv prefix) {
     return true;
 }
 
-AliSv ali_sv_strip_prefix(AliSv self, AliSv prefix) {
+Ali_Sv ali_sv_strip_prefix(Ali_Sv self, Ali_Sv prefix) {
     if (!ali_sv_starts_with_prefix(self, prefix)) return self;
     self.len -= prefix.len; 
     self.start += prefix.len; 
     return self;
 }
 
-bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix) {
+bool ali_sv_ends_with_suffix(Ali_Sv self, Ali_Sv suffix) {
     if (self.len < suffix.len) return false;
     for (ali_usize i = 0; i < suffix.len; ++i) {
         if (self.start[self.len - 1 - i] != suffix.start[suffix.len - 1 - i]) return false;
@@ -907,14 +907,14 @@ bool ali_sv_ends_with_suffix(AliSv self, AliSv suffix) {
     return true;
 }
 
-AliSv ali_sv_strip_suffix(AliSv self, AliSv suffix) {
+Ali_Sv ali_sv_strip_suffix(Ali_Sv self, Ali_Sv suffix) {
     if (!ali_sv_ends_with_suffix(self, suffix)) return self;
     self.len -= suffix.len;
     return self;
 }
 
 
-void ali_sb_render_cmd(AliSb* sb, char** cmd, ali_usize cmd_count) {
+void ali_sb_render_cmd(Ali_Sb* sb, char** cmd, ali_usize cmd_count) {
     for (ali_usize i = 0; i < cmd_count; ++i) {
         if (i != 0) ali_da_append(sb, ' ');
         if (strchr(cmd[i], ' ') == NULL) {
@@ -999,8 +999,8 @@ bool ali_mkdir_deep_if_not_exists(const char* path) {
     return true;
 }
 
-AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
-    AliJob job = {0};
+Ali_Job ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
+    Ali_Job job = {0};
     job.handle = -1;
 
     bool should_redirect_stdin = (redirect & ALI_REDIRECT_STDIN) != 0;
@@ -1048,7 +1048,7 @@ AliJob ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redir
     return job;
 }
 
-bool ali_job_wait_posix(AliJob job) {
+bool ali_job_wait_posix(Ali_Job job) {
     for (;;) {
         int wstatus;
         if (waitpid(job.handle, &wstatus, 0) < 0) {
@@ -1075,7 +1075,7 @@ bool ali_job_wait_posix(AliJob job) {
     return true;
 }
 
-AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
+Ali_Job ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
 #ifdef _WIN32
 #error "TODO: windows"
 #else // _WIN32
@@ -1083,7 +1083,7 @@ AliJob ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect) {
 #endif // _WIN32
 }
 
-bool ali_job_wait(AliJob job) {
+bool ali_job_wait(Ali_Job job) {
 #ifdef _WIN32
 #error "TODO: windows"
 #else // _WIN32
@@ -1092,7 +1092,7 @@ bool ali_job_wait(AliJob job) {
 }
 
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
-    AliJob job = ali_job_start(cmd, cmd_count, redirect);
+    Ali_Job job = ali_job_start(cmd, cmd_count, redirect);
     return ali_job_wait(job);
 }
 
@@ -1109,8 +1109,8 @@ void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...) {
     va_end(args);
 }
 
-AliJob ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect) {
-    AliJob job = ali_job_start(cmd.items, cmd.count, redirect);
+Ali_Job ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect) {
+    Ali_Job job = ali_job_start(cmd.items, cmd.count, redirect);
     return job;
 }
 
@@ -1118,14 +1118,14 @@ bool ali_cmd_run_sync(AliCmd cmd) {
     return ali_job_run(cmd.items, cmd.count, 0);
 }
 
-AliJob ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect) {
-    AliJob job = ali_job_start(cmd->items, cmd->count, redirect);
+Ali_Job ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect) {
+    Ali_Job job = ali_job_start(cmd->items, cmd->count, redirect);
     cmd->count = 0;
     return job;
 }
 
 bool ali_cmd_run_sync_and_reset(AliCmd* cmd) {
-    AliJob job = ali_cmd_run_async_and_reset(cmd, 0);
+    Ali_Job job = ali_cmd_run_async_and_reset(cmd, 0);
     return ali_job_wait(job);
 }
 
@@ -1148,15 +1148,16 @@ typedef ali_u64 u64;
 typedef ali_isize isize;
 typedef ali_usize usize;
 
-typedef AliSb Sb;
-typedef AliSv Sv;
-typedef AliAllocator Allocator;
-typedef AliAllocatorAction AllocatorAction;
-typedef AliLocation Location;
-typedef AliArena Arena;
-typedef AliSlice Slice;
-typedef AliJob Job;
-typedef AliLogger Logger;
+typedef Ali_Sb Sb;
+typedef Ali_Sv Sv;
+typedef Ali_Allocator Allocator;
+typedef Ali_Allocator_Action Allocator_Action;
+typedef Ali_Location Location;
+typedef Ali_Arena Arena;
+typedef Ali_Dynamic_Arena Dynamic_Arena;
+typedef Ali_Slice Slice;
+typedef Ali_Job Job;
+typedef Ali_Logger Logger;
 
 #define libc_get_error ali_libc_get_error
 
