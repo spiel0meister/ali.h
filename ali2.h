@@ -262,7 +262,7 @@ typedef struct {
 Ali_Slice ali_slice_slice(Ali_Slice slice, ali_usize start, ali_usize end);
 Ali_Slice ali_slice_to_byte_slice(Ali_Slice slice);
 void* ali_slice_get(Ali_Slice slice, ali_usize index);
-#define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = (slice).data; ptr < (slice).data + (slice).count * (slice).data_size; ptr++)
+#define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = (slice).data; (ali_u8*)ptr < (ali_u8*)((slice).data + (slice).count * (slice).data_size); ptr++)
 
 // string builder (sb)
 typedef struct {
