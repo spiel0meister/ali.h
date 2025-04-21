@@ -255,6 +255,7 @@ typedef struct {
 #define ali_da_slice(da) ((AliSlice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
 #define ali_sv_slice(da) ((AliSlice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
 AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end);
+AliSlice ali_slice_to_byte_slice(AliSlice slice);
 void* ali_slice_get(AliSlice slice, ali_usize index);
 #define ali_slice_foreach(slice, Type, ptr) for (Type* ptr = (slice).data; ptr < (slice).data + (slice).count * (slice).data_size; ptr++)
 
@@ -793,6 +794,14 @@ AliSlice ali_slice_slice(AliSlice slice, ali_usize start, ali_usize end) {
         .data_size = slice.data_size,
         .count = end - start,
         .data = slice.data + (slice.data_size * start),
+    };
+}
+
+AliSlice ali_slice_to_byte_slice(AliSlice slice) {
+    return (AliSlice) {
+        .count = slice.count * slice.data_size,
+        .data = slice.data,
+        .data_size = 1,
     };
 }
 
