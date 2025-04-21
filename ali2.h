@@ -1161,6 +1161,9 @@ typedef Ali_Logger Logger;
 
 #define libc_get_error ali_libc_get_error
 
+#define console_logger ali_console_logger
+#define file_logger ali_file_logger
+
 #define log_log_ex ali_log_log_ex
 #define log_debug ali_log_debug
 #define log_info ali_log_info
