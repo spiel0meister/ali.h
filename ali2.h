@@ -255,6 +255,7 @@ typedef struct {
 }AliSlice;
 
 #define ali_slice_is_of_type(slice, Type) ((slice).data_size == sizeof(Type))
+#define ali_slice_from_parts(ptr, count_) ((AliSlice) { .data_size = sizeof((ptr)[0]), .count = count_, .data = ptr })
 
 #define ali_da_slice(da) ((AliSlice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
 #define ali_sv_slice(da) ((AliSlice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
@@ -1201,6 +1202,8 @@ typedef AliLogger Logger;
 #define sv_starts_with_prefix ali_sv_starts_with_prefix
 #define sv_ends_with_suffix ali_sv_ends_with_suffix
 
+#define slice_is_of_type ali_slice_is_of_type
+#define slice_from_parts ali_slice_from_parts
 #define da_slice ali_da_slice
 #define sv_slice ali_sv_slice
 #define slice_slice ali_slice_slice
