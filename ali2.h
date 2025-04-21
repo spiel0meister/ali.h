@@ -78,7 +78,7 @@ typedef struct {
 }AliLogger;
 
 AliLogger ali_console_logger(void);
-AliLogger ali_file_logger(FILE*);
+AliLogger ali_file_logger(FILE* f);
 
 // defaults to a console logger
 extern AliLogger ali_global_logger;
