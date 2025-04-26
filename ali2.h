@@ -322,17 +322,15 @@ Ali_Job ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
 
 #define ALI_REBUILD_YOURSELF(cmd, argc, argv) do { \
-        ali_usize tstamp = ali_tstamp(); \
         const char* program = (argv)[0]; \
-        const char* old_program = ali_tsprintf("%s.old", program); \
+        const char* old_program = ali_static_sprintf("%s.old", program); \
         const char* source = __FILE__; \
         if (ali_need_rebuild(program, source)) { \
             if (!ali_rename(program, old_program)) return 1; \
-            ali_cmd_append_many(cmd, "gcc", "-o", program, source); \
+            ali_cmd_append_many(cmd, "gcc", "-ggdb", "-o", program, source); \
             if (!ali_cmd_run_sync_and_reset(cmd)) return 1; \
             if (!ali_remove(old_program)) return 1; \
         } \
-        ali_trewind(tstamp); \
     } while (0)
 
 #endif // ALI2_H
@@ -435,6 +433,8 @@ char* ali_tsprintf(const char* fmt, ...) {
     int n = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
 
+    char* ptr = buffer + buffer_size;
+
     va_start(args, fmt);
     int n_ = vsnprintf(buffer + buffer_size, n + 1, fmt, args);
     ali_unused(n_);
@@ -442,6 +442,8 @@ char* ali_tsprintf(const char* fmt, ...) {
 
     ali_assert(buffer_size + n < ALI_TEMPBUF_SIZE);
     buffer_size += n;
+
+    return ptr;
 }
 
 void* ali__arena_allocator(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
@@ -619,6 +621,8 @@ void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali
 }
 
 void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc) {
+    ali_unused(loc);
+
     static char buffer[4069] = {0};
     FILE* f = user;
 
@@ -808,6 +812,7 @@ pos_handling:
                     case FLAG_F64: {
                         current_flag->as.f64 = atof(arg);
                     } break;
+                    case FLAG_BOOL: {}break;
                 }
 
                 pos++;
