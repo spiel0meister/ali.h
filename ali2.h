@@ -1149,6 +1149,13 @@ void ali_cmd_append_many_null(Ali_Cmd* cmd, char* arg1, ...) {
 }
 
 Ali_Job ali_cmd_run_async(Ali_Cmd cmd, AliJobRedirect redirect) {
+    Ali_Sb sb = {0};
+    ali_sb_render_cmd(&sb, cmd.items, cmd.count);
+
+    Ali_Sv rendered = ali_sb_to_sv(&sb);
+    ali_log_info("[CMD] "SV_FMT, SV_F(rendered));
+
+    ali_da_free(&sb);
     Ali_Job job = ali_job_start(cmd.items, cmd.count, redirect);
     return job;
 }
@@ -1158,6 +1165,13 @@ bool ali_cmd_run_sync(Ali_Cmd cmd) {
 }
 
 Ali_Job ali_cmd_run_async_and_reset(Ali_Cmd* cmd, AliJobRedirect redirect) {
+    Ali_Sb sb = {0};
+    ali_sb_render_cmd(&sb, cmd->items, cmd->count);
+
+    Ali_Sv rendered = ali_sb_to_sv(&sb);
+    ali_log_info("[CMD] "SV_FMT, SV_F(rendered));
+
+    ali_da_free(&sb);
     Ali_Job job = ali_job_start(cmd->items, cmd->count, redirect);
     cmd->count = 0;
     return job;
