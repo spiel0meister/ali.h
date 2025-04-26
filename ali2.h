@@ -336,15 +336,15 @@ bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 
 typedef struct {
     DA(char*);
-}AliCmd;
+}Ali_Cmd;
 
 #define ali_cmd_append ali_da_append
-void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...);
+void ali_cmd_append_many_null(Ali_Cmd* cmd, char* arg1, ...);
 #define ali_cmd_append_many(cmd, ...) ali_cmd_append_many_null(cmd, __VA_ARGS__, NULL)
-Ali_Job ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect);
-bool ali_cmd_run_sync(AliCmd cmd);
-Ali_Job ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect);
-bool ali_cmd_run_sync_and_reset(AliCmd* cmd);
+Ali_Job ali_cmd_run_async(Ali_Cmd cmd, AliJobRedirect redirect);
+bool ali_cmd_run_sync(Ali_Cmd cmd);
+Ali_Job ali_cmd_run_async_and_reset(Ali_Cmd* cmd, AliJobRedirect redirect);
+bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd);
 
 #define ALI_REBUILD_YOURSELF(cmd, argc, argv) do { \
         const char* program = (argv)[0]; \
@@ -1135,7 +1135,7 @@ bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
     return ali_job_wait(job);
 }
 
-void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...) {
+void ali_cmd_append_many_null(Ali_Cmd* cmd, char* arg1, ...) {
     ali_cmd_append(cmd, arg1);
 
     va_list args;
@@ -1148,22 +1148,22 @@ void ali_cmd_append_many_null(AliCmd* cmd, char* arg1, ...) {
     va_end(args);
 }
 
-Ali_Job ali_cmd_run_async(AliCmd cmd, AliJobRedirect redirect) {
+Ali_Job ali_cmd_run_async(Ali_Cmd cmd, AliJobRedirect redirect) {
     Ali_Job job = ali_job_start(cmd.items, cmd.count, redirect);
     return job;
 }
 
-bool ali_cmd_run_sync(AliCmd cmd) {
+bool ali_cmd_run_sync(Ali_Cmd cmd) {
     return ali_job_run(cmd.items, cmd.count, 0);
 }
 
-Ali_Job ali_cmd_run_async_and_reset(AliCmd* cmd, AliJobRedirect redirect) {
+Ali_Job ali_cmd_run_async_and_reset(Ali_Cmd* cmd, AliJobRedirect redirect) {
     Ali_Job job = ali_job_start(cmd->items, cmd->count, redirect);
     cmd->count = 0;
     return job;
 }
 
-bool ali_cmd_run_sync_and_reset(AliCmd* cmd) {
+bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd) {
     Ali_Job job = ali_cmd_run_async_and_reset(cmd, 0);
     return ali_job_wait(job);
 }
