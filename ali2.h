@@ -139,18 +139,18 @@ typedef enum {
 }Ali_Allocator_Action;
 
 typedef struct {
-    void* (*allocator_function)(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user);
+    void* (*allocator_function)(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user);
     void* user;
 }Ali_Allocator;
 
 extern Ali_Allocator ali_libc_allocator;
 
-#define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, (allocator).user)
-#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, (allocator).user)
-#define ali_realloc_aligned(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, (allocator).user)
-#define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, (allocator).user)
-#define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, (allocator).user)
-#define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, (allocator).user)
+#define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, ali_here(), (allocator).user)
+#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, ali_here(), (allocator).user)
+#define ali_realloc_aligned(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, ali_here(), (allocator).user)
+#define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, ali_here(), (allocator).user)
+#define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, ali_here(), (allocator).user)
+#define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, ali_here(), (allocator).user)
 
 // temporary buffer
 
@@ -191,10 +191,10 @@ typedef struct {
 typedef struct {
     Ali_Arena_Chunk* target;
     ali_usize size;
-}AliArenaMark;
+}Ali_Arena_Mark;
 
-AliArenaMark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena);
-void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, AliArenaMark mark);
+Ali_Arena_Mark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena);
+void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, Ali_Arena_Mark mark);
 Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
 
 // dynamic arrays (da)
@@ -392,10 +392,12 @@ char* ali_static_sprintf(const char* fmt, ...) {
     return str;
 }
 
-void* ali__libc_allocator_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+void* ali__libc_allocator_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
     ali_unused(user);
     ali_unused(old_size);
     ali_unused(alignment);
+    ali_unused(loc);
+
     switch (action) {
         case ALI_ALLOC:
             return malloc(size);
@@ -446,7 +448,8 @@ char* ali_tsprintf(const char* fmt, ...) {
     return ptr;
 }
 
-void* ali__arena_allocator(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+void* ali__arena_allocator(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
+    ali_unused(loc);
     Ali_Arena* arena = user;
     switch (action) {
         case ALI_ALLOC: {
@@ -495,14 +498,14 @@ Ali_Allocator ali_arena_allocator(Ali_Arena* arena) {
     };
 }
 
-AliArenaMark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena) {
-    return (AliArenaMark) {
+Ali_Arena_Mark ali_dynamic_arena_mark(Ali_Dynamic_Arena* arena) {
+    return (Ali_Arena_Mark) {
         .target = arena->end,
         .size = arena->end->size,
     };
 }
 
-void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, AliArenaMark mark) {
+void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, Ali_Arena_Mark mark) {
     arena->end = mark.target;
     mark.target->size = mark.size;
     Ali_Arena_Chunk* current = mark.target->next;
@@ -511,7 +514,8 @@ void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, AliArenaMark mark) {
     }
 }
 
-void* ali__dynamic_arena_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, void* user) {
+void* ali__dynamic_arena_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
+    ali_unused(loc);
     Ali_Dynamic_Arena* arena = user;
     switch (action) {
             case ALI_ALLOC: {
