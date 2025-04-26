@@ -145,13 +145,21 @@ typedef struct {
 }Ali_Allocator;
 
 extern Ali_Allocator ali_libc_allocator;
+extern Ali_Allocator ali_global_allocator;
 
-#define ali_alloc_aligned(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, ali_here(), (allocator).user)
-#define ali_alloc(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, ali_here(), (allocator).user)
-#define ali_realloc_aligned(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, ali_here(), (allocator).user)
-#define ali_realloc(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, ali_here(), (allocator).user)
-#define ali_free(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, ali_here(), (allocator).user)
-#define ali_freeall(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, ali_here(), (allocator).user)
+#define ali_alloc_aligned_ex(allocator, size, alignment) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, alignment, ali_here(), (allocator).user)
+#define ali_alloc_ex(allocator, size) (allocator).allocator_function(ALI_ALLOC, NULL, 0, size, 8, ali_here(), (allocator).user)
+#define ali_realloc_aligned_ex(allocator, old_pointer, old_size, size, alignment) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, alignment, ali_here(), (allocator).user)
+#define ali_realloc_ex(allocator, old_pointer, old_size, size) (allocator).allocator_function(ALI_REALLOC, old_pointer, old_size, size, 8, ali_here(), (allocator).user)
+#define ali_free_ex(allocator, old_pointer) (allocator).allocator_function(ALI_FREE, old_pointer, 0, 0, 0, ali_here(), (allocator).user)
+#define ali_freeall_ex(allocator) (allocator).allocator_function(ALI_FREEALL, NULL, 0, 0, 0, ali_here(), (allocator).user)
+
+#define ali_alloc_aligned(size, alignment) ali_alloc_aligned_ex(ali_global_allocator, size, alignment)
+#define ali_alloc(size) ali_alloc_ex(ali_global_allocator, size)
+#define ali_realloc_aligned(size, alignment) ali_realloc_aligned_ex(ali_global_allocator, size, alignment)
+#define ali_realloc(size) ali_realloc_aligned_ex(ali_global_allocator, size)
+#define ali_free(old_pointer) ali_free_ex(ali_global_allocator, old_pointer)
+#define ali_freeall() ali_freeall_ex(ali_global_allocator)
 
 // temporary buffer
 
@@ -435,6 +443,11 @@ Ali_Allocator ali_libc_allocator = {
     .user = NULL,
 };
 
+Ali_Allocator ali_global_allocator = {
+    .allocator_function = ali__libc_allocator_function,
+    .user = NULL,
+};
+
 static char buffer[ALI_TEMPBUF_SIZE];
 static ali_usize buffer_size = 0;
 
@@ -623,64 +636,6 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena) {
     return (Ali_Allocator) {
         .allocator_function = ali__dynamic_arena_function,
         .user = arena,
-    };
-}
-
-Ali_Tracking_Allocator ali_track_allocator(Ali_Allocator allocator) {
-    return (Ali_Tracking_Allocator) {
-        .allocator = allocator,
-    };
-}
-
-void ali_log_tracked(Ali_Tracking_Allocator allocator) {
-    ali_da_foreach(&allocator, Ali_Tracked_Allocation, allocation) {
-        ali_log_info("%p - %luB (%s:%d)", allocation->ptr, allocation->size, allocation->loc.file, allocation->loc.line);
-    }
-}
-
-void* ali__tracking_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
-    Ali_Tracking_Allocator* tracking = user;
-    void* ptr = tracking->allocator.allocator_function(action, old_pointer, old_size, size, alignment, loc, user);
-    switch (action) {
-        case ALI_ALLOC: {
-            Ali_Tracked_Allocation allocation = {
-                .size = size,
-                .loc = loc,
-                .ptr = ptr,
-            };
-            da_append(tracking, allocation);
-        }break;
-        case ALI_REALLOC: {
-            da_foreach(tracking, Ali_Tracked_Allocation, allocation) {
-                if (allocation->ptr == old_pointer) {
-                    allocation->ptr = ptr;
-                    allocation->size = size;
-                    allocation->loc = loc;
-                    break;
-                }
-            }
-        } break;
-        case ALI_FREE: {
-            for (ali_usize i = 0; i < tracking->count; ++i) {
-                if (tracking->items[i].ptr == old_pointer) {
-                    ali_da_remove_unordered(tracking, i);
-                    break;
-                }
-            }
-        }break;
-        case ALI_FREEALL: {
-            ali_da_free(tracking);
-        }break;
-        default:
-            ali_todo();
-    }
-    return ptr;
-}
-
-Ali_Allocator ali_tracking_allocator(Ali_Tracking_Allocator* allocator) {
-    return (Ali_Allocator) {
-        .user = allocator,
-        .allocator_function = ali__tracking_function,
     };
 }
 
@@ -948,7 +903,7 @@ void ali_sb_sprintf(Ali_Sb* sb, const char* fmt, ...) {
 }
 
 char* ali_sb_to_cstr(Ali_Sb* sb, Ali_Allocator allocator) {
-    char* copy = ali_alloc(allocator, sb->count + 1);
+    char* copy = ali_alloc_ex(allocator, sb->count + 1);
     memcpy(copy, sb->items, sb->count);
     copy[sb->count] = 0;
     return copy;
@@ -1099,7 +1054,7 @@ Ali_Job ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redi
         if (ali_pipe2(job.in)) return job;
     }
 
-    char** cmd_copy = ali_alloc(ali_libc_allocator, sizeof(cmd[0]) * (cmd_count + 1));
+    char** cmd_copy = ali_alloc_ex(ali_libc_allocator, sizeof(cmd[0]) * (cmd_count + 1));
     memcpy(cmd_copy, cmd, sizeof(cmd[0]) * cmd_count);
     cmd_copy[cmd_count] = NULL;
 
@@ -1128,7 +1083,7 @@ Ali_Job ali_job_start_posix(char** cmd, ali_usize cmd_count, AliJobRedirect redi
         exit(1);
     }
 
-    ali_free(ali_libc_allocator, cmd_copy);
+    ali_free_ex(ali_libc_allocator, cmd_copy);
     return job;
 }
 
