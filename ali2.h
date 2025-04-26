@@ -231,6 +231,22 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
 #define ali_da_free(da) (free((da)->items), (da)->items = NULL, (da)->capacity = 0, (da)->count = 0)
 #define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; ptr < (da)->items + (da)->count; ++ptr)
 
+// tracking allocator
+typedef struct {
+    Ali_Location loc;
+    ali_usize size;
+    void* ptr;
+}Ali_Tracked_Allocation;
+
+typedef struct {
+    Ali_Allocator allocator;
+    DA(Ali_Tracked_Allocation);
+}Ali_Tracking_Allocator;
+
+Ali_Tracking_Allocator ali_track_allocator(Ali_Allocator allocator);
+Ali_Allocator ali_tracking_allocator(Ali_Tracking_Allocator* allocator);
+void ali_log_tracked(Ali_Tracking_Allocator allocator);
+
 // string view (sv)
 typedef struct {
     const char* start;
@@ -607,6 +623,64 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena) {
     return (Ali_Allocator) {
         .allocator_function = ali__dynamic_arena_function,
         .user = arena,
+    };
+}
+
+Ali_Tracking_Allocator ali_track_allocator(Ali_Allocator allocator) {
+    return (Ali_Tracking_Allocator) {
+        .allocator = allocator,
+    };
+}
+
+void ali_log_tracked(Ali_Tracking_Allocator allocator) {
+    ali_da_foreach(&allocator, Ali_Tracked_Allocation, allocation) {
+        ali_log_info("%p - %luB (%s:%d)", allocation->ptr, allocation->size, allocation->loc.file, allocation->loc.line);
+    }
+}
+
+void* ali__tracking_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
+    Ali_Tracking_Allocator* tracking = user;
+    void* ptr = tracking->allocator.allocator_function(action, old_pointer, old_size, size, alignment, loc, user);
+    switch (action) {
+        case ALI_ALLOC: {
+            Ali_Tracked_Allocation allocation = {
+                .size = size,
+                .loc = loc,
+                .ptr = ptr,
+            };
+            da_append(tracking, allocation);
+        }break;
+        case ALI_REALLOC: {
+            da_foreach(tracking, Ali_Tracked_Allocation, allocation) {
+                if (allocation->ptr == old_pointer) {
+                    allocation->ptr = ptr;
+                    allocation->size = size;
+                    allocation->loc = loc;
+                    break;
+                }
+            }
+        } break;
+        case ALI_FREE: {
+            for (ali_usize i = 0; i < tracking->count; ++i) {
+                if (tracking->items[i].ptr == old_pointer) {
+                    ali_da_remove_unordered(tracking, i);
+                    break;
+                }
+            }
+        }break;
+        case ALI_FREEALL: {
+            ali_da_free(tracking);
+        }break;
+        default:
+            ali_todo();
+    }
+    return ptr;
+}
+
+Ali_Allocator ali_tracking_allocator(Ali_Tracking_Allocator* allocator) {
+    return (Ali_Allocator) {
+        .user = allocator,
+        .allocator_function = ali__tracking_function,
     };
 }
 
