@@ -347,15 +347,20 @@ Ali_Job ali_cmd_run_async_and_reset(Ali_Cmd* cmd, AliJobRedirect redirect);
 bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd);
 
 #define ALI_REBUILD_YOURSELF(cmd, argc, argv) do { \
-        const char* program = (argv)[0]; \
-        const char* old_program = ali_static_sprintf("%s.old", program); \
-        const char* source = __FILE__; \
+        ali_usize stamp = ali_tstamp(); \
+        char* program = (argv)[0]; \
+        char* old_program = ali_tsprintf("%s.old", program); \
+        char* source = __FILE__; \
         if (ali_need_rebuild(program, source)) { \
             if (!ali_rename(program, old_program)) return 1; \
             ali_cmd_append_many(cmd, "gcc", "-ggdb", "-o", program, source); \
             if (!ali_cmd_run_sync_and_reset(cmd)) return 1; \
             if (!ali_remove(old_program)) return 1; \
+            ali_cmd_append(cmd, program); \
+            if (!ali_cmd_run_sync_and_reset(cmd)) return 1; \
+            exit(0); \
         } \
+        ali_trewind(stamp); \
     } while (0)
 
 #endif // ALI2_H
