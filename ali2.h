@@ -262,7 +262,7 @@ typedef struct {
 }Ali_Sv;
 #define SV(static_cstr) ((Ali_Sv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
 #define SV_FMT "%.*s"
-#define SV_F(sv) (int)(sv).count, (sv).items
+#define SV_F(sv) (int)(sv).len, (sv).start
 
 Ali_Sv ali_sv_from_cstr(const char* cstr);
 Ali_Sv ali_sv_from_parts(const char* start, ali_usize len);
