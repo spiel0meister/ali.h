@@ -228,6 +228,15 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
         memcpy((da)->items + (da)->count, items_, (item_count) * sizeof((da)->items[0])); \
         (da)->count += item_count; \
     } while (0)
+#define ali_da_append_variadic(da, Type, ...) do { \
+        Type items_[] = { __VA_ARGS__ }; \
+        ali_usize item_count = ali_array_len(items_); \
+        if (item_count > 0) { \
+            ali_da_resize_for(da, item_count); \
+            memcpy((da)->items + (da)->count, items_, (item_count) * sizeof((da)->items[0])); \
+            (da)->count += item_count; \
+        } \
+    } while (0)
 #define ali_da_remove_unordered(da, i) (ali_assert(i < (da)->count), (da)->items[i] = (da)->items[--(da)->count])
 #define ali_da_remove_ordered(da, i) do { \
         ali_assert((da)->count > 0); \
@@ -1243,6 +1252,7 @@ typedef Ali_Logger Logger;
 #define da_append ali_da_append
 #define da_shallow_append ali_da_shallow_append
 #define da_append_many ali_da_append_many
+#define da_append_variadic ali_da_append_variadic
 #define da_remove_unordered ali_da_remove_unordered
 #define da_remove_ordered ali_da_remove_ordered
 #define da_clear ali_da_clear
