@@ -421,6 +421,7 @@ struct Ali_Step {
 
     Ali_Steps srcs; // this WILL be passed to the compiler/ar (ex. source files)
     Ali_Steps deps; // this WILL NOT be passed to the compiler (ex. header files)
+    Ali_Cstrs linker_flags; // linker flags (passed as -W,%s)
 };
 
 typedef struct {
@@ -1298,6 +1299,7 @@ void ali_step_free(Ali_Step* step) {
         ali_step_free(substep);
     }
     ali_da_free(&step->deps);
+    ali_da_free(&step->linker_flags);
 }
 
 bool ali_step_need_rebuild(Ali_Step* step) {
@@ -1356,8 +1358,9 @@ void ali_step_add_dep(Ali_Step* step, Ali_Step substep) {
 
 bool ali_step_build(Ali_Step* step) {
     bool result = true;
-    Ali_Cmd cmd = {0};
 
+    ali_usize stamp = ali_tstamp();
+    Ali_Cmd cmd = {0};
     bool need_rebuild = ali_step_need_rebuild(step);
     if (!need_rebuild) ali_return_defer(true);
 
@@ -1373,6 +1376,10 @@ bool ali_step_build(Ali_Step* step) {
             ali_da_foreach(&step->deps, Ali_Step, substep) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
             }
+            ali_da_foreach(&step->linker_flags, char*, lflag) {
+                char* flag = ali_tsprintf("-Wl,%s", lflag);
+                ali_cmd_append_many(&cmd, flag);
+            }
             result = ali_cmd_run_sync(cmd);
         }break;
         case ALI_STEP_STATIC: {
@@ -1384,6 +1391,7 @@ bool ali_step_build(Ali_Step* step) {
             ali_da_foreach(&step->deps, Ali_Step, substep) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
             }
+            // ar does not do linking
             result = ali_cmd_run_sync(cmd);
         }break;
         case ALI_STEP_DYNAMIC: {
@@ -1396,6 +1404,10 @@ bool ali_step_build(Ali_Step* step) {
             }
             ali_da_foreach(&step->deps, Ali_Step, substep) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
+            }
+            ali_da_foreach(&step->linker_flags, char*, lflag) {
+                char* flag = ali_tsprintf("-Wl,%s", lflag);
+                ali_cmd_append_many(&cmd, flag);
             }
             result = ali_cmd_run_sync(cmd);
         }break;
@@ -1412,10 +1424,13 @@ defer:
         }
     }
 
+    ali_trewind(stamp);
     ali_da_free(&cmd);
     return result;
 }
 
+// Gets to each step and does ali_da_remove(step->name)
+// !!! Except the ones that have type ALI_STEP_FILE !!!
 bool ali_step_clean(Ali_Step* step) {
     if (step->type != ALI_STEP_FILE) {
         if (!ali_remove(step->name)) return false;
