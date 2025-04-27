@@ -409,7 +409,6 @@ typedef enum {
 typedef struct Ali_Step Ali_Step;
 typedef struct { DA(Ali_Step); }Ali_Steps;
 
-// TODO: incremental bulding
 struct Ali_Step {
     Ali_Step_Type type;
     Ali_Debug_Type debug;
@@ -433,6 +432,7 @@ Ali_Step ali_step_static(char* name, Ali_Debug_Type debug, Ali_Optimize_Type opt
 void ali_step_add_src(Ali_Step* step, Ali_Step substep);
 void ali_step_add_dep(Ali_Step* step, Ali_Step substep);
 
+bool ali_step_need_rebuild(Ali_Step* step);
 bool ali_step_build(Ali_Step* step);
 
 void ali_build_free(Ali_Build* b);
@@ -1291,6 +1291,18 @@ void ali_step_free(Ali_Step* step) {
     ali_da_free(&step->deps);
 }
 
+bool ali_step_need_rebuild(Ali_Step* step) {
+    ali_da_foreach(&step->srcs, Ali_Step, substep) {
+        if (ali_step_need_rebuild(substep)) return true;
+        if (ali_need_rebuild(step->name, substep->name)) return true;
+    }
+    ali_da_foreach(&step->deps, Ali_Step, substep) {
+        if (ali_step_need_rebuild(substep)) return true;
+        if (ali_need_rebuild(step->name, substep->name)) return true;
+    }
+    return false;
+}
+
 Ali_Step ali_step_file(char* name) {
     return (Ali_Step) {
         .name = name,
@@ -1337,6 +1349,9 @@ bool ali_step_build(Ali_Step* step) {
     bool result = true;
     Ali_Cmd cmd = {0};
 
+    bool need_rebuild = ali_step_need_rebuild(step);
+    if (!need_rebuild) ali_return_defer(true);
+
     switch (step->type) {
         case ALI_STEP_FILE: {}break; // no build step required, just a file
         case ALI_STEP_EXE: {
@@ -1379,8 +1394,13 @@ bool ali_step_build(Ali_Step* step) {
             ali_unreachable();
     }
 
-    if (step->type != ALI_STEP_FILE)
-        ali_log_info("[BUILD] Build %s", step->name);
+    if (step->type != ALI_STEP_FILE) {
+        if (need_rebuild) {
+            ali_log_info("[BUILD] Build %s", step->name);
+        } else {
+            ali_log_info("[BUILD] No need to build %s", step->name);
+        }
+    }
 
 defer:
     ali_da_free(&cmd);
