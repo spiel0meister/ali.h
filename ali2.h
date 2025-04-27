@@ -975,7 +975,7 @@ Ali_Sv ali_sv_strip_suffix(Ali_Sv self, Ali_Sv suffix) {
 
 void ali_sb_render_cmd(Ali_Sb* sb, char** cmd, ali_usize cmd_count) {
     for (ali_usize i = 0; i < cmd_count; ++i) {
-        if (i != 0) ali_da_append(sb, ' ');
+        if (i != 0) ali_da_append(sb, (char)' ');
         if (strchr(cmd[i], ' ') == NULL) {
             int len = strlen(cmd[i]);
             ali_da_append_many(sb, cmd[i], len);
@@ -1181,7 +1181,8 @@ Ali_Job ali_cmd_run_async(Ali_Cmd cmd, AliJobRedirect redirect) {
 }
 
 bool ali_cmd_run_sync(Ali_Cmd cmd) {
-    return ali_job_run(cmd.items, cmd.count, 0);
+    Ali_Job job = ali_cmd_run_async(cmd, 0);
+    return ali_job_wait(job);
 }
 
 Ali_Job ali_cmd_run_async_and_reset(Ali_Cmd* cmd, AliJobRedirect redirect) {
