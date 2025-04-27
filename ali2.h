@@ -246,7 +246,7 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
     } while (0)
 #define ali_da_clear(da) (da)->count = 0
 #define ali_da_free(da) (free((da)->items), (da)->items = NULL, (da)->capacity = 0, (da)->count = 0)
-#define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; ptr < (da)->items + (da)->count; ++ptr)
+#define ali_da_foreach(da, Type, ptr) for (Type* ptr = (da)->items; (uintptr_t)ptr < (uintptr_t)(da)->items + (da)->count; ++ptr)
 
 // tracking allocator
 typedef struct {
