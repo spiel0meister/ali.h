@@ -435,9 +435,14 @@ void ali_step_add_dep(Ali_Step* step, Ali_Step substep);
 bool ali_step_need_rebuild(Ali_Step* step);
 bool ali_step_build(Ali_Step* step);
 
+#define ali_build_install ali_da_append
+
 void ali_build_free(Ali_Build* b);
 bool ali_build_build(Ali_Build* b);
-#define ali_build_install ali_da_append
+
+// Gets to each step and does ali_da_remove(step->name)
+// !!! Except the ones that have type ALI_STEP_FILE !!!
+bool ali_build_clean(Ali_Build* b);
 
 #endif // ALI2_H
 
@@ -1407,6 +1412,19 @@ defer:
     return result;
 }
 
+bool ali_step_clean(Ali_Step* step) {
+    if (step->type != ALI_STEP_FILE) {
+        if (!ali_remove(step->name)) return false;
+    }
+    ali_da_foreach(&step->srcs, Ali_Step, substep) {
+        if (!ali_step_clean(substep)) return false;
+    }
+    ali_da_foreach(&step->deps, Ali_Step, substep) {
+        if (!ali_step_clean(substep)) return false;
+    }
+    return true;
+}
+
 void ali_build_free(Ali_Build* b) {
     ali_da_foreach(b, Ali_Step, step) {
         ali_step_free(step);
@@ -1421,6 +1439,12 @@ bool ali_build_build(Ali_Build* b) {
     return true;
 }
 
+bool ali_build_clean(Ali_Build* b) {
+    ali_da_foreach(b, Ali_Step, step) {
+        if (!ali_step_clean(step)) return false;
+    }
+    return true;
+}
 
 #endif // ALI_IMPLEMENTATION
 
