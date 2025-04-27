@@ -388,12 +388,32 @@ typedef enum {
     ALI_STEP_DYNAMIC,
 }Ali_Step_Type;
 
+typedef enum {
+    ALI_DEBUG_NONE = 0,
+    ALI_DEBUG_AUTO,
+    ALI_DEBUG_GDB,
+    ALI_DEBUG_COUNT_,
+}Ali_Debug_Type;
+
+typedef enum {
+    ALI_OPTIMIZE_NONE = 0,
+    ALI_OPTIMIZE_ONE,
+    ALI_OPTIMIZE_TWO,
+    ALI_OPTIMIZE_THREE,
+    ALI_OPTIMIZE_FAST,
+    ALI_OPTIMIZE_SIZE,
+    ALI_OPTIMIZE_SIZE_AGRESSIVE,
+    ALI_OPTIMIZE_COUNT_,
+}Ali_Optimize_Type;
+
 typedef struct Ali_Step Ali_Step;
 typedef struct { DA(Ali_Step); }Ali_Steps;
 
 // TODO: incremental bulding
 struct Ali_Step {
     Ali_Step_Type type;
+    Ali_Debug_Type debug;
+    Ali_Optimize_Type optimize;
     char* name;
 
     Ali_Steps srcs; // this WILL be passed to the compiler/ar (ex. source files)
@@ -406,9 +426,9 @@ typedef struct {
 
 void ali_step_free(Ali_Step* step);
 Ali_Step ali_step_file(char* name);
-Ali_Step ali_step_executable(char* name);
-Ali_Step ali_step_dynamic(char* name);
-Ali_Step ali_step_static(char* name);
+Ali_Step ali_step_executable(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize);
+Ali_Step ali_step_dynamic(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize);
+Ali_Step ali_step_static(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize);
 
 void ali_step_add_src(Ali_Step* step, Ali_Step substep);
 void ali_step_add_dep(Ali_Step* step, Ali_Step substep);
@@ -1244,6 +1264,22 @@ bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd) {
     return ali_job_wait(job);
 }
 
+const char* ali__debug_to_str[ALI_DEBUG_COUNT_] = {
+    [ALI_DEBUG_NONE] = "-g0",
+    [ALI_DEBUG_AUTO] = "-g",
+    [ALI_DEBUG_GDB] = "-ggdb",
+};
+
+const char* ali__optimize_to_str[ALI_OPTIMIZE_COUNT_] = {
+    [ALI_OPTIMIZE_NONE] = "-O0",
+    [ALI_OPTIMIZE_ONE] = "-O1",
+    [ALI_OPTIMIZE_TWO] = "-O2",
+    [ALI_OPTIMIZE_THREE] = "-O3",
+    [ALI_OPTIMIZE_FAST] = "-Ofast",
+    [ALI_OPTIMIZE_SIZE] = "-Os",
+    [ALI_OPTIMIZE_SIZE_AGRESSIVE] = "-Oz",
+};
+
 void ali_step_free(Ali_Step* step) {
     ali_da_foreach(&step->srcs, Ali_Step, substep) {
         ali_step_free(substep);
@@ -1262,24 +1298,30 @@ Ali_Step ali_step_file(char* name) {
     };
 }
 
-Ali_Step ali_step_executable(char* name) {
+Ali_Step ali_step_executable(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize) {
     return (Ali_Step) {
         .name = name,
         .type = ALI_STEP_EXE,
+        .debug = debug,
+        .optimize = optimize,
     };
 }
 
-Ali_Step ali_step_dynamic(char* name) {
+Ali_Step ali_step_dynamic(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize) {
     return (Ali_Step) {
         .name = name,
         .type = ALI_STEP_DYNAMIC,
+        .debug = debug,
+        .optimize = optimize,
     };
 }
 
-Ali_Step ali_step_static(char* name) {
+Ali_Step ali_step_static(char* name, Ali_Debug_Type debug, Ali_Optimize_Type optimize) {
     return (Ali_Step) {
         .name = name,
         .type = ALI_STEP_STATIC,
+        .debug = debug,
+        .optimize = optimize,
     };
 }
 
@@ -1298,7 +1340,7 @@ bool ali_step_build(Ali_Step* step) {
     switch (step->type) {
         case ALI_STEP_FILE: {}break; // no build step required, just a file
         case ALI_STEP_EXE: {
-            ali_cmd_append_many(&cmd, "gcc");
+            ali_cmd_append_many(&cmd, "gcc", ali__debug_to_str[step->debug], ali__optimize_to_str[step->optimize]);
             ali_cmd_append_many(&cmd, "-o", step->name);
             ali_da_foreach(&step->srcs, Ali_Step, substep) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
@@ -1321,7 +1363,7 @@ bool ali_step_build(Ali_Step* step) {
             result = ali_cmd_run_sync(cmd);
         }break;
         case ALI_STEP_DYNAMIC: {
-            ali_cmd_append_many(&cmd, "gcc");
+            ali_cmd_append_many(&cmd, "gcc", ali__debug_to_str[step->debug], ali__optimize_to_str[step->optimize]);
             ali_cmd_append_many(&cmd, "-shared", "-fPIC");
             ali_cmd_append_many(&cmd, "-o", step->name);
             ali_da_foreach(&step->srcs, Ali_Step, substep) {

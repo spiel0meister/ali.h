@@ -7,9 +7,11 @@ int main(int argc, char** argv) {
     ALI_REBUILD_YOURSELF(&cmd, argc, argv);
 
     Ali_Build b = {0};
+    Ali_Debug_Type debug = ALI_DEBUG_GDB;
+    Ali_Optimize_Type optimize = ALI_OPTIMIZE_NONE;
 
     {
-        Ali_Step exe = ali_step_executable("main");
+        Ali_Step exe = ali_step_executable("main", debug, optimize);
         ali_step_add_src(&exe, ali_step_file("main.c"));
         ali_build_install(&b, exe);
     }
