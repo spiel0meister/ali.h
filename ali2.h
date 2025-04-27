@@ -349,6 +349,7 @@ Ali_Job ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(Ali_Job job);
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 
+// cmd abstraction
 typedef struct {
     DA(char*);
 }Ali_Cmd;
@@ -377,6 +378,46 @@ bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd);
         } \
         ali_trewind(stamp); \
     } while (0)
+
+// build
+
+typedef enum {
+    ALI_STEP_FILE,
+    ALI_STEP_EXE,
+    ALI_STEP_STATIC,
+    ALI_STEP_DYNAMIC,
+}Ali_Step_Type;
+
+typedef struct Ali_Step Ali_Step;
+typedef struct { DA(Ali_Step); }Ali_Steps;
+
+// TODO: incremental bulding
+struct Ali_Step {
+    Ali_Step_Type type;
+    char* name;
+
+    Ali_Steps srcs; // this WILL be passed to the compiler/ar (ex. source files)
+    Ali_Steps deps; // this WILL NOT be passed to the compiler (ex. header files)
+};
+
+typedef struct {
+    DA(Ali_Step);
+}Ali_Build;
+
+void ali_step_free(Ali_Step* step);
+Ali_Step ali_step_file(char* name);
+Ali_Step ali_step_executable(char* name);
+Ali_Step ali_step_dynamic(char* name);
+Ali_Step ali_step_static(char* name);
+
+void ali_step_add_src(Ali_Step* step, Ali_Step substep);
+void ali_step_add_dep(Ali_Step* step, Ali_Step substep);
+
+bool ali_step_build(Ali_Step* step);
+
+void ali_build_free(Ali_Build* b);
+bool ali_build_build(Ali_Build* b);
+#define ali_build_install ali_da_append
 
 #endif // ALI2_H
 
@@ -1202,6 +1243,122 @@ bool ali_cmd_run_sync_and_reset(Ali_Cmd* cmd) {
     Ali_Job job = ali_cmd_run_async_and_reset(cmd, 0);
     return ali_job_wait(job);
 }
+
+void ali_step_free(Ali_Step* step) {
+    ali_da_foreach(&step->srcs, Ali_Step, substep) {
+        ali_step_free(substep);
+    }
+    ali_da_free(&step->srcs);
+    ali_da_foreach(&step->deps, Ali_Step, substep) {
+        ali_step_free(substep);
+    }
+    ali_da_free(&step->deps);
+}
+
+Ali_Step ali_step_file(char* name) {
+    return (Ali_Step) {
+        .name = name,
+        .type = ALI_STEP_FILE,
+    };
+}
+
+Ali_Step ali_step_executable(char* name) {
+    return (Ali_Step) {
+        .name = name,
+        .type = ALI_STEP_EXE,
+    };
+}
+
+Ali_Step ali_step_dynamic(char* name) {
+    return (Ali_Step) {
+        .name = name,
+        .type = ALI_STEP_DYNAMIC,
+    };
+}
+
+Ali_Step ali_step_static(char* name) {
+    return (Ali_Step) {
+        .name = name,
+        .type = ALI_STEP_STATIC,
+    };
+}
+
+void ali_step_add_src(Ali_Step* step, Ali_Step substep) {
+    ali_da_append(&step->srcs, substep);
+}
+
+void ali_step_add_dep(Ali_Step* step, Ali_Step substep) {
+    ali_da_append(&step->deps, substep);
+}
+
+bool ali_step_build(Ali_Step* step) {
+    bool result = true;
+    Ali_Cmd cmd = {0};
+
+    switch (step->type) {
+        case ALI_STEP_FILE: {}break; // no build step required, just a file
+        case ALI_STEP_EXE: {
+            ali_cmd_append_many(&cmd, "gcc");
+            ali_cmd_append_many(&cmd, "-o", step->name);
+            ali_da_foreach(&step->srcs, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+                ali_da_append(&cmd, substep->name);
+            }
+            ali_da_foreach(&step->deps, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+            }
+            result = ali_cmd_run_sync(cmd);
+        }break;
+        case ALI_STEP_STATIC: {
+            ali_cmd_append_many(&cmd, "ar", "rcs", step->name);
+            ali_da_foreach(&step->srcs, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+                ali_da_append(&cmd, substep->name);
+            }
+            ali_da_foreach(&step->deps, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+            }
+            result = ali_cmd_run_sync(cmd);
+        }break;
+        case ALI_STEP_DYNAMIC: {
+            ali_cmd_append_many(&cmd, "gcc");
+            ali_cmd_append_many(&cmd, "-shared", "-fPIC");
+            ali_cmd_append_many(&cmd, "-o", step->name);
+            ali_da_foreach(&step->srcs, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+                ali_da_append(&cmd, substep->name);
+            }
+            ali_da_foreach(&step->deps, Ali_Step, substep) {
+                if (!ali_step_build(substep)) ali_return_defer(false);
+            }
+            result = ali_cmd_run_sync(cmd);
+        }break;
+        default:
+            ali_unreachable();
+    }
+
+    if (step->type != ALI_STEP_FILE)
+        ali_log_info("[BUILD] Build %s", step->name);
+
+defer:
+    ali_da_free(&cmd);
+    return result;
+}
+
+void ali_build_free(Ali_Build* b) {
+    ali_da_foreach(b, Ali_Step, step) {
+        ali_step_free(step);
+    }
+    ali_da_free(b);
+}
+
+bool ali_build_build(Ali_Build* b) {
+    ali_da_foreach(b, Ali_Step, step) {
+        if (!ali_step_build(step)) return false;
+    }
+    return true;
+}
+
 
 #endif // ALI_IMPLEMENTATION
 

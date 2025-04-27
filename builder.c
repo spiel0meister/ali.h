@@ -6,8 +6,16 @@ int main(int argc, char** argv) {
     Ali_Cmd cmd = {0};
     ALI_REBUILD_YOURSELF(&cmd, argc, argv);
 
-    cmd_append_many(&cmd, "gcc", "-Wall", "-Wextra", "-Werror", "-ggdb", "-o", "main", "main.c");
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    Ali_Build b = {0};
+
+    {
+        Ali_Step exe = ali_step_executable("main");
+        ali_step_add_src(&exe, ali_step_file("main.c"));
+        ali_build_install(&b, exe);
+    }
+
+    if (!ali_build_build(&b)) return 1;
+    ali_build_free(&b);
 
     da_free(&cmd);
     return 0;
