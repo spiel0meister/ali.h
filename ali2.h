@@ -216,19 +216,23 @@ Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
         } \
     } while (0)
 #define ali_da_append(da, item) do { \
+        ali_static_assert(sizeof((da)[0]) == sizeof((item)[0])); \
         ali_da_resize_for(da, 1); \
         (da)->items[(da)->count++] = (item); \
     } while (0)
 #define ali_da_shallow_append(da, item) do { \
+        ali_static_assert(sizeof((da)[0]) == sizeof((item)[0])); \
         ali_da_resize_for(da, 1); \
         (da)->items[(da)->count] = (item); \
     } while (0)
 #define ali_da_append_many(da, items_, item_count) do { \
+        ali_static_assert(sizeof((da)[0]) == sizeof((items_)[0])); \
         ali_da_resize_for(da, item_count); \
         memcpy((da)->items + (da)->count, items_, (item_count) * sizeof((da)->items[0])); \
         (da)->count += item_count; \
     } while (0)
 #define ali_da_append_variadic(da, Type, ...) do { \
+        ali_static_assert(sizeof((da)[0]) == sizeof(Type)); \
         Type items_[] = { __VA_ARGS__ }; \
         ali_usize item_count = ali_array_len(items_); \
         if (item_count > 0) { \
