@@ -1394,7 +1394,8 @@ bool ali_step_build(Ali_Step* step) {
             ali_unreachable();
     }
 
-    if (step->type != ALI_STEP_FILE) {
+defer:
+    if (result && step->type != ALI_STEP_FILE) {
         if (need_rebuild) {
             ali_log_info("[BUILD] Build %s", step->name);
         } else {
@@ -1402,7 +1403,6 @@ bool ali_step_build(Ali_Step* step) {
         }
     }
 
-defer:
     ali_da_free(&cmd);
     return result;
 }
