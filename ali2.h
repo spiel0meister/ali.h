@@ -35,6 +35,8 @@ void ali_assertf_with_loc(bool ok, Ali_Location loc, const char* fmt, ...);
 #define ali_array_len(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define ali_shift(arr, count) (ali_assert(count > 0), (count)--, *(arr)++)
 
+#define ali_return_defer(value) do { result = (value); goto defer; } while (0)
+
 #ifndef ALI_TYPE_ALIASES
 #define ALI_TYPE_ALIASES
 
