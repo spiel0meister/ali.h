@@ -353,6 +353,12 @@ Ali_Job ali_job_start(char** cmd, ali_usize cmd_count, AliJobRedirect redirect);
 bool ali_job_wait(Ali_Job job);
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect);
 
+typedef struct {
+    DA(Ali_Job);
+}Ali_Jobs;
+
+bool ali_jobs_wait(Ali_Jobs jobs);
+
 // cmd abstraction
 typedef struct {
     DA(char*);
@@ -1224,6 +1230,14 @@ bool ali_job_wait(Ali_Job job) {
 bool ali_job_run(char **cmd, ali_usize cmd_count, AliJobRedirect redirect) {
     Ali_Job job = ali_job_start(cmd, cmd_count, redirect);
     return ali_job_wait(job);
+}
+
+bool ali_jobs_wait(Ali_Jobs jobs) {
+    bool result = true;
+    ali_da_foreach(&jobs, Ali_Job, job) {
+        if (!ali_job_wait(*job)) result = false;
+    }
+    return true;
 }
 
 void ali_cmd_append_many_null(Ali_Cmd* cmd, char* arg1, ...) {
