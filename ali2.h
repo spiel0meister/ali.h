@@ -1590,6 +1590,7 @@ typedef Ali_Logger Logger;
 #define job_wait ali_job_wait
 #define job_run ali_job_run
 #define jobs_wait ali_jobs_wait
+#define jobs_wait_and_reset ali_jobs_wait_and_reset
 
 #define is_file1_modified_after_file2 ali_is_file1_modified_after_file2
 #define need_rebuild ali_need_rebuild
