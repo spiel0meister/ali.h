@@ -1243,10 +1243,10 @@ bool ali_jobs_wait(Ali_Jobs jobs) {
 
 bool ali_jobs_wait_and_reset(Ali_Jobs* jobs) {
     bool result = true;
-    ali_da_foreach(&jobs, Ali_Job, job) {
+    ali_da_foreach(jobs, Ali_Job, job) {
         if (!ali_job_wait(*job)) result = false;
     }
-    jobs.count = 0;
+    jobs->count = 0;
     return result;
 }
 
@@ -1401,7 +1401,7 @@ bool ali_step_build(Ali_Step* step) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
             }
             ali_da_foreach(&step->linker_flags, char*, lflag) {
-                char* flag = ali_tsprintf("-Wl,%s", lflag);
+                char* flag = ali_tsprintf("-Wl,%s", *lflag);
                 ali_cmd_append_many(&cmd, flag);
             }
             result = ali_cmd_run_sync(cmd);
@@ -1430,7 +1430,7 @@ bool ali_step_build(Ali_Step* step) {
                 if (!ali_step_build(substep)) ali_return_defer(false);
             }
             ali_da_foreach(&step->linker_flags, char*, lflag) {
-                char* flag = ali_tsprintf("-Wl,%s", lflag);
+                char* flag = ali_tsprintf("-Wl,%s", *lflag);
                 ali_cmd_append_many(&cmd, flag);
             }
             result = ali_cmd_run_sync(cmd);
