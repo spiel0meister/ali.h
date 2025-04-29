@@ -358,6 +358,7 @@ typedef struct {
 }Ali_Jobs;
 
 bool ali_jobs_wait(Ali_Jobs jobs);
+bool ali_jobs_wait_and_reset(Ali_Jobs* jobs);
 
 // cmd abstraction
 typedef struct {
@@ -427,7 +428,7 @@ struct Ali_Step {
 
     Ali_Steps srcs; // this WILL be passed to the compiler/ar (ex. source files)
     Ali_Steps deps; // this WILL NOT be passed to the compiler (ex. header files)
-    Ali_Cstrs linker_flags; // linker flags (passed as -W,%s)
+    Ali_Cstrs linker_flags; // linker flags (passed as -Wl,%s)
 };
 
 typedef struct {
@@ -1237,7 +1238,16 @@ bool ali_jobs_wait(Ali_Jobs jobs) {
     ali_da_foreach(&jobs, Ali_Job, job) {
         if (!ali_job_wait(*job)) result = false;
     }
-    return true;
+    return result;
+}
+
+bool ali_jobs_wait_and_reset(Ali_Jobs* jobs) {
+    bool result = true;
+    ali_da_foreach(&jobs, Ali_Job, job) {
+        if (!ali_job_wait(*job)) result = false;
+    }
+    jobs.count = 0;
+    return result;
 }
 
 void ali_cmd_append_many_null(Ali_Cmd* cmd, char* arg1, ...) {
@@ -1509,6 +1519,17 @@ typedef Ali_Slice Slice;
 typedef Ali_Job Job;
 typedef Ali_Logger Logger;
 
+#define trap ali_trap
+#define assert ali_assert
+#define assertf ali_assertf
+#define static_assert ali_static_assert
+#define todo ali_todo
+#define unreachable ali_unreachable
+#define unused ali_unused
+#define array_len ali_array_len
+#define shift ali_shift
+#define return_defer ali_return_defer
+
 #define libc_get_error ali_libc_get_error
 
 #define console_logger ali_console_logger
@@ -1568,7 +1589,7 @@ typedef Ali_Logger Logger;
 #define job_start ali_job_start
 #define job_wait ali_job_wait
 #define job_run ali_job_run
-#define jobs_wait ali_jobs_run
+#define jobs_wait ali_jobs_wait
 
 #define is_file1_modified_after_file2 ali_is_file1_modified_after_file2
 #define need_rebuild ali_need_rebuild
