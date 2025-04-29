@@ -433,6 +433,7 @@ struct Ali_Step {
 
 typedef struct {
     DA(Ali_Step);
+    Ali_Jobs jobs;
 }Ali_Build;
 
 void ali_step_free(Ali_Step* step);
@@ -445,12 +446,12 @@ void ali_step_add_src(Ali_Step* step, Ali_Step substep);
 void ali_step_add_dep(Ali_Step* step, Ali_Step substep);
 
 bool ali_step_need_rebuild(Ali_Step* step);
-bool ali_step_build(Ali_Step* step);
+bool ali_step_build(Ali_Step* step, Ali_Jobs* jobs, ali_usize cores);
 
 #define ali_build_install ali_da_append
 
 void ali_build_free(Ali_Build* b);
-bool ali_build_build(Ali_Build* b);
+bool ali_build_build(Ali_Build* b, ali_usize cores);
 
 // Gets to each step and does ali_da_remove(step->name)
 // !!! Except the ones that have type ALI_STEP_FILE !!!
@@ -1380,7 +1381,11 @@ void ali_step_add_dep(Ali_Step* step, Ali_Step substep) {
     ali_da_append(&step->deps, substep);
 }
 
-bool ali_step_build(Ali_Step* step) {
+bool ali_step_build(Ali_Step* step, Ali_Jobs* jobs, ali_usize cores) {
+    if (jobs->count >= cores) {
+        if (!ali_jobs_wait_and_reset(jobs)) return false;
+    }
+
     bool result = true;
 
     ali_usize stamp = ali_tstamp();
@@ -1394,46 +1399,49 @@ bool ali_step_build(Ali_Step* step) {
             ali_cmd_append_many(&cmd, "gcc", ali__debug_to_str[step->debug], ali__optimize_to_str[step->optimize]);
             ali_cmd_append_many(&cmd, "-o", step->name);
             ali_da_foreach(&step->srcs, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
                 ali_da_append(&cmd, substep->name);
             }
             ali_da_foreach(&step->deps, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
             }
             ali_da_foreach(&step->linker_flags, char*, lflag) {
                 char* flag = ali_tsprintf("-Wl,%s", *lflag);
                 ali_cmd_append_many(&cmd, flag);
             }
-            result = ali_cmd_run_sync(cmd);
+            Ali_Job step_job = ali_cmd_run_async(cmd, 0);
+            ali_da_append(jobs, step_job);
         }break;
         case ALI_STEP_STATIC: {
             ali_cmd_append_many(&cmd, "ar", "rcs", step->name);
             ali_da_foreach(&step->srcs, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
                 ali_da_append(&cmd, substep->name);
             }
             ali_da_foreach(&step->deps, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
             }
             // ar does not do linking
-            result = ali_cmd_run_sync(cmd);
+            Ali_Job step_job = ali_cmd_run_async(cmd, 0);
+            ali_da_append(jobs, step_job);
         }break;
         case ALI_STEP_DYNAMIC: {
             ali_cmd_append_many(&cmd, "gcc", ali__debug_to_str[step->debug], ali__optimize_to_str[step->optimize]);
             ali_cmd_append_many(&cmd, "-shared", "-fPIC");
             ali_cmd_append_many(&cmd, "-o", step->name);
             ali_da_foreach(&step->srcs, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
                 ali_da_append(&cmd, substep->name);
             }
             ali_da_foreach(&step->deps, Ali_Step, substep) {
-                if (!ali_step_build(substep)) ali_return_defer(false);
+                if (!ali_step_build(substep, jobs, cores)) ali_return_defer(false);
             }
             ali_da_foreach(&step->linker_flags, char*, lflag) {
                 char* flag = ali_tsprintf("-Wl,%s", *lflag);
                 ali_cmd_append_many(&cmd, flag);
             }
-            result = ali_cmd_run_sync(cmd);
+            Ali_Job step_job = ali_cmd_run_async(cmd, 0);
+            ali_da_append(jobs, step_job);
         }break;
         default:
             ali_unreachable();
@@ -1472,12 +1480,14 @@ void ali_build_free(Ali_Build* b) {
     ali_da_foreach(b, Ali_Step, step) {
         ali_step_free(step);
     }
+    ali_jobs_wait(b->jobs);
+    ali_da_free(&b->jobs);
     ali_da_free(b);
 }
 
-bool ali_build_build(Ali_Build* b) {
+bool ali_build_build(Ali_Build* b, ali_usize cores) {
     ali_da_foreach(b, Ali_Step, step) {
-        if (!ali_step_build(step)) return false;
+        if (!ali_step_build(step, &b->jobs, cores)) return false;
     }
     return true;
 }

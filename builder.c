@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
         ali_build_install(&b, exe);
     }
 
-    if (!ali_build_build(&b)) return 1;
+    if (!ali_build_build(&b, 1)) return 1;
     ali_build_free(&b);
 
     da_free(&cmd);
