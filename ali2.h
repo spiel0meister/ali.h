@@ -10,11 +10,12 @@
 // macros
 typedef struct {
     const char* file;
+    const char* function;
     int line;
 }Ali_Location;
 
 #define ali_trap() __builtin_trap()
-#define ali_here() ((Ali_Location) { .file = __FILE__, .line = __LINE__ })
+#define ali_here() ((Ali_Location) { .file = __FILE__, .function = __func__, .line = __LINE__ })
 
 #ifndef ALI_REMOVE_ASSERT
 #define ali_assert(expr) ali_assert_with_loc(#expr, expr, ali_here())
@@ -77,6 +78,7 @@ typedef struct {
     bool date:1;
     bool time:1;
     bool loc:1;
+    bool function:1;
     bool terminal_color:1;
     // TODO: bool thread_id:1;
 }Ali_Log_Opts;
@@ -782,7 +784,7 @@ void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali
     }
 
     if (opts.loc) {
-        fprintf(stderr, "[%s:%d] ", loc.file, loc.line);
+        fprintf(stderr, "[%s:%d(%s)] ", loc.file, loc.line, loc.function);
     }
 
     fprintf(stderr, "%s\n", msg);
@@ -803,18 +805,18 @@ void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Lo
         char buffer[4096] = {0};
         const char* DATE_FORMAT = "%Y %m. %d.";
         strftime(buffer, sizeof(buffer), DATE_FORMAT, localtime(&now));
-        fprintf(f, "%s ", buffer);
+        fprintf(f, "[%s] ", buffer);
     }
 
     if (opts.time) {
         char buffer[4096] = {0};
         const char* TIME_FORMAT = "%H";
         strftime(buffer, sizeof(buffer), TIME_FORMAT, localtime(&now));
-        fprintf(f, "%s ", buffer);
+        fprintf(f, "[%s] ", buffer);
     }
 
     if (opts.loc) {
-        fprintf(f, "%s:%d ", loc.file, loc.line);
+        fprintf(f, "[%s:%d(%s)] ", loc.file, loc.line, loc.function);
     }
 
     fprintf(f, "%s\n", msg);
