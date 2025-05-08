@@ -72,12 +72,23 @@ typedef enum {
 
 extern const char* ali_loglevel_to_str[LOG_COUNT_];
 
-typedef void (*Ali_Logger_Function)(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc);
+typedef struct {
+    bool level:1;
+    bool date:1;
+    bool time:1;
+    bool loc:1;
+    bool terminal_color:1;
+    // TODO: bool thread_id:1;
+}Ali_Log_Opts;
+#define ALI_LOG_OPTS_DEFAULT ((Ali_Log_Opts) { .level = true })
+
+typedef void (*Ali_Logger_Function)(Ali_Log_Level level, const char* msg, void* user, Ali_Log_Opts opts, Ali_Location loc);
 
 typedef struct {
+    void* user;
     Ali_Logger_Function function;
     Ali_Log_Level level;
-    void* user;
+    Ali_Log_Opts opts;
 }Ali_Logger;
 
 Ali_Logger ali_console_logger(void);
@@ -746,23 +757,67 @@ const char* ali_loglevel_to_str[LOG_COUNT_] = {
     [LOG_ERROR] = "ERROR",
 };
 
-void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc) {
+void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali_Log_Opts opts, Ali_Location loc) {
     ali_unused(user);
     ali_unused(loc);
 
-    fprintf(stderr, "[%s] %s\n", ali_loglevel_to_str[level], msg);
+    time_t now = time(NULL);
+
+    if (opts.level) {
+        fprintf(stderr, "[%s] ", ali_loglevel_to_str[level]);
+    }
+
+    if (opts.date) {
+        char buffer[4096] = {0};
+        const char* DATE_FORMAT = "%Y %m. %d.";
+        strftime(buffer, sizeof(buffer), DATE_FORMAT, localtime(&now));
+        fprintf(stderr, "[%s] ", buffer);
+    }
+
+    if (opts.time) {
+        char buffer[4096] = {0};
+        const char* TIME_FORMAT = "%H";
+        strftime(buffer, sizeof(buffer), TIME_FORMAT, localtime(&now));
+        fprintf(stderr, "[%s] ", buffer);
+    }
+
+    if (opts.loc) {
+        fprintf(stderr, "[%s:%d] ", loc.file, loc.line);
+    }
+
+    fprintf(stderr, "%s\n", msg);
 }
 
-void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Location loc) {
+void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Log_Opts opts, Ali_Location loc) {
     ali_unused(loc);
 
+    time_t now = time(NULL);
     static char buffer[4069] = {0};
     FILE* f = user;
 
-    time_t now = time(NULL);
-    strftime(buffer, sizeof(buffer), "%F %R", localtime(&now));
+    if (opts.level) {
+        fprintf(f, "[%s] ", ali_loglevel_to_str[level]);
+    }
 
-    fprintf(f, "[%s] [%s] %s\n", ali_loglevel_to_str[level], buffer, msg);
+    if (opts.date) {
+        char buffer[4096] = {0};
+        const char* DATE_FORMAT = "%Y %m. %d.";
+        strftime(buffer, sizeof(buffer), DATE_FORMAT, localtime(&now));
+        fprintf(f, "%s ", buffer);
+    }
+
+    if (opts.time) {
+        char buffer[4096] = {0};
+        const char* TIME_FORMAT = "%H";
+        strftime(buffer, sizeof(buffer), TIME_FORMAT, localtime(&now));
+        fprintf(f, "%s ", buffer);
+    }
+
+    if (opts.loc) {
+        fprintf(f, "%s:%d ", loc.file, loc.line);
+    }
+
+    fprintf(f, "%s\n", msg);
 }
 
 Ali_Logger ali_console_logger(void) {
@@ -770,6 +825,7 @@ Ali_Logger ali_console_logger(void) {
         .level = LOG_INFO,
         .function = ali__console_function,
         .user = NULL,
+        .opts = ALI_LOG_OPTS_DEFAULT,
     };
 }
 
@@ -778,6 +834,7 @@ Ali_Logger ali_file_logger(FILE* f) {
         .level = LOG_INFO,
         .function = ali__file_function,
         .user = f,
+        .opts = ALI_LOG_OPTS_DEFAULT,
     };
 }
 
@@ -785,6 +842,7 @@ Ali_Logger ali_global_logger = {
     .level = LOG_INFO,
     .function = ali__console_function,
     .user = NULL,
+    .opts = ALI_LOG_OPTS_DEFAULT,
 };
 
 void ali_log_log_ex(Ali_Logger logger, Ali_Log_Level level, Ali_Location loc, const char* fmt, ...) {
@@ -795,7 +853,7 @@ void ali_log_log_ex(Ali_Logger logger, Ali_Log_Level level, Ali_Location loc, co
     va_start(args, fmt);
 
     const char* msg = ali_static_vsprintf(fmt, args);
-    logger.function(level, msg, logger.user, loc);
+    logger.function(level, msg, logger.user, logger.opts, loc);
 
     va_end(args);
 }
