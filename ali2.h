@@ -72,6 +72,7 @@ typedef enum {
 }Ali_Log_Level;
 
 extern const char* ali_loglevel_to_str[LOG_COUNT_];
+extern const char* ali_loglevel_color[LOG_COUNT_];
 
 typedef struct {
     bool level:1;
@@ -759,6 +760,13 @@ const char* ali_loglevel_to_str[LOG_COUNT_] = {
     [LOG_ERROR] = "ERROR",
 };
 
+const char* ali_loglevel_color[LOG_COUNT_] = {
+    [LOG_DEBUG] = "\x1B[33m",
+    [LOG_INFO]= "\x1B[0m",
+    [LOG_WARN]= "\x1B[93m",
+    [LOG_ERROR] = "\x1B[91m",
+};
+
 void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali_Log_Opts opts, Ali_Location loc) {
     ali_unused(user);
     ali_unused(loc);
@@ -766,7 +774,14 @@ void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali
     time_t now = time(NULL);
 
     if (opts.level) {
-        fprintf(stderr, "[%s] ", ali_loglevel_to_str[level]);
+        if (opts.terminal_color) {
+            fputs(ali_loglevel_color[level], stderr);
+            fprintf(stderr, "[%s]", ali_loglevel_to_str[level]);
+            fprintf(stderr, "\x1B[0m");
+            fprintf(stderr, " ");
+        } else {
+            fprintf(stderr, "[%s] ", ali_loglevel_to_str[level]);
+        }
     }
 
     if (opts.date) {
