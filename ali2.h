@@ -291,7 +291,7 @@ void ali_log_tracked(Ali_Tracking_Allocator allocator);
 // string view (sv)
 typedef struct {
     char* start;
-    size_t len;
+    ali_usize len;
 }Ali_Sv;
 #define SV(static_cstr) ((Ali_Sv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
 #define SV_FMT "%.*s"
@@ -316,7 +316,7 @@ typedef struct {
 #define ali_slice_from_parts(ptr, count_) ((Ali_Slice) { .data_size = sizeof((ptr)[0]), .count = count_, .data = ptr })
 
 #define ali_da_slice(da) ((Ali_Slice) { .data_size = sizeof((da).items[0]), .count = (da).count, .data = (da).items })
-#define ali_sv_slice(da) ((Ali_Slice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
+#define ali_sv_slice(sv) ((Ali_Slice) { .data_size = 1, .count = (sv).count, .data = (sv).items })
 Ali_Slice ali_slice_slice(Ali_Slice slice, ali_usize start, ali_usize end);
 Ali_Slice ali_slice_to_byte_slice(Ali_Slice slice);
 void* ali_slice_get(Ali_Slice slice, ali_usize index);
