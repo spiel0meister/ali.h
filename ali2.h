@@ -29,7 +29,7 @@ void ali_assertf_with_loc(bool ok, Ali_Location loc, const char* fmt, ...);
 
 #define ali_static_assert(expr) _Static_assert(expr, "Static assertion failed: " #expr)
 
-#define ali_todo() do { fprintf(stderr, "%s:%d: TODO", __FILE__, __LINE__); ali_trap(); } while (0)
+#define ali_todo() do { fprintf(stderr, "%s:%d: TODO\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unused(thing) (void)(thing)
 
