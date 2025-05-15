@@ -290,7 +290,7 @@ void ali_log_tracked(Ali_Tracking_Allocator allocator);
 
 // string view (sv)
 typedef struct {
-    const char* start;
+    char* start;
     size_t len;
 }Ali_Sv;
 #define SV(static_cstr) ((Ali_Sv) { .start = static_cstr, .len = sizeof(static_cstr) - 1 })
