@@ -58,11 +58,36 @@ typedef ali_u64 ali_usize;
 #endif // ALI_TYPE_ALIASES
 
 // general
+#define ali__dump_number_decl(name, Type) char* name(char buffer[64], Type number);
+#define ali__dump_number_impl(name, Type) char* name(char buffer[64], Type number) { \
+        ali_usize buffer_size = 0; \
+        do { \
+            buffer[64 - buffer_size - 1] = number % 10; \
+            number /= 10; \
+        } while (number != 0 && buffer_size < 64); \
+        return buffer; \
+    } \
+
 char* ali_libc_get_error(void);
 char* ali_static_vsprintf(const char* fmt, va_list args);
 __attribute__((__format__(printf, 1, 2)))
 char* ali_static_sprintf(const char* fmt, ...);
 bool ali_mem_eq(const void* a, const void* b, ali_usize size);
+
+ali__dump_number_decl(ali_dump_int, int);
+ali__dump_number_decl(ali_dump_uint, unsigned int);
+ali__dump_number_decl(ali_dump_i8, ali_i8);
+ali__dump_number_decl(ali_dump_i16, ali_i16);
+ali__dump_number_decl(ali_dump_i32, ali_i32);
+ali__dump_number_decl(ali_dump_i64, ali_i64);
+
+ali__dump_number_decl(ali_dump_u8,  ali_u8);
+ali__dump_number_decl(ali_dump_u16, ali_u16);
+ali__dump_number_decl(ali_dump_u32, ali_u32);
+ali__dump_number_decl(ali_dump_u64, ali_u64);
+
+ali__dump_number_decl(ali_dump_isize, ali_isize);
+ali__dump_number_decl(ali_dump_usize, ali_usize);
 
 // logging
 typedef enum {
@@ -542,6 +567,19 @@ bool ali_mem_eq(const void* a, const void* b, ali_usize size) {
     }
     return true;
 }
+
+ali__dump_number_impl(ali_dump_int, int);
+ali__dump_number_impl(ali_dump_uint, unsigned int);
+ali__dump_number_impl(ali_dump_i8, ali_i8);
+ali__dump_number_impl(ali_dump_i16, ali_i16);
+ali__dump_number_impl(ali_dump_i32, ali_i32);
+ali__dump_number_impl(ali_dump_i64, ali_i64);
+ali__dump_number_impl(ali_dump_u8, ali_u8);
+ali__dump_number_impl(ali_dump_u16, ali_u16);
+ali__dump_number_impl(ali_dump_u32, ali_u32);
+ali__dump_number_impl(ali_dump_u64, ali_u64);
+ali__dump_number_impl(ali_dump_isize, ali_isize);
+ali__dump_number_impl(ali_dump_usize, ali_usize);
 
 void* ali__libc_allocator_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
     ali_unused(user);
