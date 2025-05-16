@@ -73,6 +73,7 @@ char* ali_static_vsprintf(const char* fmt, va_list args);
 __attribute__((__format__(printf, 1, 2)))
 char* ali_static_sprintf(const char* fmt, ...);
 bool ali_mem_eq(const void* a, const void* b, ali_usize size);
+char* ali_text_format(char* buffer, ali_usize buffer_size, const char* fmt, ...);
 
 ali__dump_number_decl(ali_dump_int, int);
 ali__dump_number_decl(ali_dump_uint, unsigned int);
@@ -566,6 +567,95 @@ bool ali_mem_eq(const void* a, const void* b, ali_usize size) {
         if (ab[i] != bb[i]) return false;
     }
     return true;
+}
+
+char* ali_text_format(char* buffer, ali_usize buffer_size, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    Ali_Sb sb = {0};
+    while (*fmt != 0) {
+        char* left_brace = strchr(fmt, '{');
+        if (left_brace == NULL) {
+            ali_da_append_many(&sb, fmt, strlen(fmt));
+            goto defer;
+        }
+
+        ali_da_append_many(&sb, fmt, left_brace - fmt);
+        fmt = left_brace + 1;
+
+        if (*fmt == '{') {
+            ali_da_append(&sb, (char)'{');
+            fmt++;
+            continue;
+        }
+
+        char* right_brace = strchr(fmt, '}');
+        ali_assert(right_brace != NULL && "Unterminated '{' in format string");
+
+        Ali_Sv to_format = ali_sv_from_parts(fmt, right_brace - fmt);
+        fmt = right_brace + 1;
+
+        ali_assert(to_format.len > 0 && "We cannot infer the type of the arg in C to format");
+
+        if (ali_sv_eq(to_format, SV("s"))) {
+            const char* str = va_arg(args, char*);
+            ali_da_append_many(&sb, str, strlen(str));
+        } else if (ali_sv_eq(to_format, SV("sv"))) {
+            Ali_Sv sv = va_arg(args, Ali_Sv);
+            ali_da_append_many(&sb, sv.start, sv.len);
+        } else if (ali_sv_eq(to_format, SV("b"))) {
+            bool b = va_arg(args, int);
+            Ali_Sv to_append = b ? SV("true") : SV("false");
+            ali_da_append_many(&sb, to_append.start, to_append.len);
+        } else if (ali_sv_eq(to_format, SV("i"))) {
+            int byte = va_arg(args, int);
+
+            ali_da_resize_for(&sb, 64);
+            char buffer[64] = {0};
+            ali_dump_int(buffer, byte);
+            ali_da_append_many(&sb, buffer, strlen(buffer));
+        } else if (ali_sv_eq(to_format, SV("u"))) {
+            unsigned int byte = va_arg(args, unsigned int);
+
+            ali_da_resize_for(&sb, 64);
+            char buffer[64] = {0};
+            ali_dump_uint(buffer, byte);
+            ali_da_append_many(&sb, buffer, strlen(buffer));
+        } else if (ali_sv_eq(to_format, SV("us"))) {
+            ali_usize byte = va_arg(args, ali_usize);
+
+            ali_da_resize_for(&sb, 64);
+            char buffer[64] = {0};
+            ali_dump_usize(buffer, byte);
+            ali_da_append_many(&sb, buffer, strlen(buffer));
+        } else if (ali_sv_eq(to_format, SV("is"))) {
+            ali_isize byte = va_arg(args, ali_isize);
+
+            ali_da_resize_for(&sb, 64);
+            char buffer[64] = {0};
+            ali_dump_isize(buffer, byte);
+            ali_da_append_many(&sb, buffer, strlen(buffer));
+        } else if (ali_sv_eq(to_format, SV("p"))) {
+            void* ptr = va_arg(args, void*);
+            ali_sb_sprintf(&sb, "%lx", (unsigned long)ptr);
+        } else {
+            ali_log_error("Unkown format string "SV_FMT, SV_F(to_format));
+            ali_trap();
+        }
+    }
+
+defer:
+    if (sb.count > buffer_size) {
+        memcpy(buffer, sb.items, buffer_size - 4);
+        memcpy(buffer + buffer_size - 4, "...", 3);
+    } else {
+        memcpy(buffer, sb.items, sb.count);
+    }
+    buffer[buffer_size - 1] = 0;
+    ali_da_free(&sb);
+    va_end(args);
+    return buffer;
 }
 
 ali__dump_number_impl(ali_dump_int, int);
