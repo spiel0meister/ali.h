@@ -32,6 +32,7 @@ void ali_assertf_with_loc(bool ok, Ali_Location loc, const char* fmt, ...);
 #define ali_todo() do { fprintf(stderr, "%s:%d: TODO\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unreachable() do { fprintf(stderr, "%s:%d: UNREACHABLE\n", __FILE__, __LINE__); ali_trap(); } while (0)
 #define ali_unused(thing) (void)(thing)
+#define ali_panic(msg) do { fprintf(stderr, "PANIC: %s", msg); ali_trap(); } while (0)
 
 #define ali_array_len(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define ali_shift(arr, count) (ali_assert(count > 0), (count)--, *(arr)++)
