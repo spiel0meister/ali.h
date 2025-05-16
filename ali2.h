@@ -61,6 +61,7 @@ char* ali_libc_get_error(void);
 char* ali_static_vsprintf(const char* fmt, va_list args);
 __attribute__((__format__(printf, 1, 2)))
 char* ali_static_sprintf(const char* fmt, ...);
+bool ali_mem_eq(const void* a, const void* b, ali_usize size);
 
 // logging
 typedef enum {
@@ -305,6 +306,7 @@ bool ali_sv_starts_with_prefix(Ali_Sv self, Ali_Sv prefix);
 Ali_Sv ali_sv_strip_prefix(Ali_Sv self, Ali_Sv prefix);
 bool ali_sv_ends_with_suffix(Ali_Sv self, Ali_Sv suffix);
 Ali_Sv ali_sv_strip_suffix(Ali_Sv self, Ali_Sv suffix);
+bool ali_sv_eq(Ali_Sv a, Ali_Sv b);
 
 // slices
 typedef struct {
@@ -529,6 +531,15 @@ char* ali_static_sprintf(const char* fmt, ...) {
     char* str = ali_static_vsprintf(fmt, args);
     va_end(args);
     return str;
+}
+
+bool ali_mem_eq(const void* a, const void* b, ali_usize size) {
+    const char* ab = a;
+    const char* bb = b;
+    for (ali_usize i = 0; i < size; ++i) {
+        if (ab[i] != bb[i]) return false;
+    }
+    return true;
 }
 
 void* ali__libc_allocator_function(Ali_Allocator_Action action, void* old_pointer, ali_usize old_size, ali_usize size, ali_usize alignment, Ali_Location loc, void* user) {
@@ -1128,6 +1139,10 @@ Ali_Sv ali_sv_strip_suffix(Ali_Sv self, Ali_Sv suffix) {
     return self;
 }
 
+bool ali_sv_eq(Ali_Sv a, Ali_Sv b) {
+    if (a.len != b.len) return false;
+    return ali_mem_eq(a.start, b.start, a.len);
+}
 
 void ali_sb_render_cmd(Ali_Sb* sb, char** cmd, ali_usize cmd_count) {
     for (ali_usize i = 0; i < cmd_count; ++i) {
