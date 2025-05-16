@@ -74,16 +74,17 @@ typedef enum {
 extern const char* ali_loglevel_to_str[LOG_COUNT_];
 extern const char* ali_loglevel_color[LOG_COUNT_];
 
-typedef struct {
-    bool level:1;
-    bool date:1;
-    bool time:1;
-    bool loc:1;
-    bool function:1;
-    bool terminal_color:1;
-    // TODO: bool thread_id:1;
-}Ali_Log_Opts;
-#define ALI_LOG_OPTS_DEFAULT ((Ali_Log_Opts) { .level = true })
+typedef ali_u32 Ali_Log_Opts;
+#define ALI_LOG_OPT_LEVEL ((Ali_Log_Opts)0x1)
+#define ALI_LOG_OPT_DATE ((Ali_Log_Opts)0x2)
+#define ALI_LOG_OPT_TIME ((Ali_Log_Opts)0x4)
+#define ALI_LOG_OPT_LOC ((Ali_Log_Opts)0x8)
+#define ALI_LOG_OPT_FUNCTION ((Ali_Log_Opts)0x10)
+#define ALI_LOG_OPT_TERMCOLOR ((Ali_Log_Opts)0x20)
+// TODO: 
+// #define ALI_LOG_OPT_THREAD_ID 0x40
+
+#define ALI_LOG_OPTS_DEFAULT (ALI_LOG_OPT_LEVEL | ALI_LOG_OPT_LOC | ALI_LOG_OPT_TERMCOLOR)
 
 typedef void (*Ali_Logger_Function)(Ali_Log_Level level, const char* msg, void* user, Ali_Log_Opts opts, Ali_Location loc);
 
@@ -772,9 +773,10 @@ void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali
     ali_unused(loc);
 
     time_t now = time(NULL);
+    bool terminal_color = opts & ALI_LOG_OPT_TERMCOLOR != 0;
 
-    if (opts.level) {
-        if (opts.terminal_color) {
+    if (opts & ALI_LOG_OPT_LEVEL) {
+        if (terminal_color) {
             fputs(ali_loglevel_color[level], stderr);
             fprintf(stderr, "[%s]", ali_loglevel_to_str[level]);
             fprintf(stderr, "\x1B[0m");
@@ -784,21 +786,21 @@ void ali__console_function(Ali_Log_Level level, const char* msg, void* user, Ali
         }
     }
 
-    if (opts.date) {
+    if (opts & ALI_LOG_OPT_TIME) {
         char buffer[4096] = {0};
         const char* DATE_FORMAT = "%Y %m. %d.";
         strftime(buffer, sizeof(buffer), DATE_FORMAT, localtime(&now));
         fprintf(stderr, "[%s] ", buffer);
     }
 
-    if (opts.time) {
+    if (opts & ALI_LOG_OPT_DATE) {
         char buffer[4096] = {0};
         const char* TIME_FORMAT = "%H";
         strftime(buffer, sizeof(buffer), TIME_FORMAT, localtime(&now));
         fprintf(stderr, "[%s] ", buffer);
     }
 
-    if (opts.loc) {
+    if (opts & ALI_LOG_OPT_LOC) {
         fprintf(stderr, "[%s:%d(%s)] ", loc.file, loc.line, loc.function);
     }
 
@@ -812,25 +814,25 @@ void ali__file_function(Ali_Log_Level level, const char* msg, void* user, Ali_Lo
     static char buffer[4069] = {0};
     FILE* f = user;
 
-    if (opts.level) {
+    if (opts & ALI_LOG_OPT_LEVEL) {
         fprintf(f, "[%s] ", ali_loglevel_to_str[level]);
     }
 
-    if (opts.date) {
+    if (opts & ALI_LOG_OPT_TIME) {
         char buffer[4096] = {0};
         const char* DATE_FORMAT = "%Y %m. %d.";
         strftime(buffer, sizeof(buffer), DATE_FORMAT, localtime(&now));
         fprintf(f, "[%s] ", buffer);
     }
 
-    if (opts.time) {
+    if (opts & ALI_LOG_OPT_DATE) {
         char buffer[4096] = {0};
         const char* TIME_FORMAT = "%H";
         strftime(buffer, sizeof(buffer), TIME_FORMAT, localtime(&now));
         fprintf(f, "[%s] ", buffer);
     }
 
-    if (opts.loc) {
+    if (opts & ALI_LOG_OPT_LOC) {
         fprintf(f, "[%s:%d(%s)] ", loc.file, loc.line, loc.function);
     }
 
