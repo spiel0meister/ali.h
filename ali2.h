@@ -206,6 +206,8 @@ extern Ali_Allocator ali_global_allocator;
 #define ali_free(old_pointer) ali_free_ex(ali_global_allocator, old_pointer)
 #define ali_freeall() ali_freeall_ex(ali_global_allocator)
 
+void ali_ensure_allocator_is_valid(Ali_Allocator* allocator);
+
 // temporary buffer
 
 #ifndef ALI_TEMPBUF_SIZE
@@ -252,8 +254,9 @@ void ali_dynamic_arena_rollback(Ali_Dynamic_Arena* arena, Ali_Arena_Mark mark);
 Ali_Allocator ali_dynamic_arena_allocator(Ali_Dynamic_Arena* arena);
 
 // dynamic arrays (da)
-#define DA(Type) Type* items; ali_usize count, capacity
+#define DA(Type) Ali_Allocator allocator; Type* items; ali_usize count, capacity
 #define ali_da_resize_for(da, item_count) do {\
+        ali_ensure_allocator_is_valid(&(da)->allocator); \
         if ((da)->count + (item_count) >= (da)->capacity) { \
             if ((da)->capacity == 0) (da)->capacity = 8; \
             while ((da)->count + (item_count) >= (da)->capacity) (da)->capacity *= 3; \
@@ -309,7 +312,6 @@ typedef struct {
 }Ali_Tracked_Allocation;
 
 typedef struct {
-    Ali_Allocator allocator;
     DA(Ali_Tracked_Allocation);
 }Ali_Tracking_Allocator;
 
@@ -701,6 +703,13 @@ Ali_Allocator ali_global_allocator = {
     .allocator_function = ali__libc_allocator_function,
     .user = NULL,
 };
+
+void ali_ensure_allocator_is_valid(Ali_Allocator* allocator) {
+    ali_assert(allocator != NULL);
+    if (allocator->allocator_function == NULL) {
+        *allocator = ali_libc_allocator;
+    }
+}
 
 static char buffer[ALI_TEMPBUF_SIZE];
 static ali_usize buffer_size = 0;
